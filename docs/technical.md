@@ -78,6 +78,8 @@ Web uploads are processed in server memory; this application does not persist or
 ```sh
 python -m unittest discover -v
 node --check public/app.js
+npm ci --ignore-scripts
+npm test
 ```
 
 Tests include the generated sample, a real upstream DOCX, source XML comparisons, byte-preserving exports, relationships, Unicode, unsafe archives, resource limits, CLI execution, and real local HTTP requests. CI runs these checks on pushes and PRs.
@@ -99,3 +101,7 @@ See [Vercel Python runtime](https://vercel.com/docs/functions/runtimes/python) a
 ## Resuming interrupted work
 
 The source, fixtures, tests, and CI remain in GitHub. Running `python -m unittest discover -v` resumes verification; a push to the connected branch triggers a new Vercel build. There is no script that can reset ChatGPT usage limits or restart this chat agent, and this repository does not claim to provide one.
+
+## Repository metadata
+
+The GitHub plugin cannot update repository About fields. `bash scripts/configure_repo.sh <verified-live-url>` applies the prepared description, topics, and website URL using your authenticated GitHub CLI. This script is optional and has not been run against GitHub in this session.

@@ -22,7 +22,10 @@ class ApiHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
         if download:
-            self.send_header("Content-Disposition", 'attachment; filename="docx-ray-xml.zip"')
+            self.send_header(
+                "Content-Disposition",
+                f'attachment; filename="{download if isinstance(download, str) else "docx-ray-xml.zip"}"',
+            )
         self.end_headers()
         self.wfile.write(body)
 
@@ -51,7 +54,9 @@ class ApiHandler(BaseHTTPRequestHandler):
             filename = unquote(self.headers.get("X-Filename", "document.docx"))
             if path == "/api/part":
                 part_path = parse_qs(urlsplit(self.path).query).get("path", [""])[0]
-                return self.respond(200, xml_part(data, part_path, filename), "application/xml", download=True)
+                return self.respond(
+                    200, xml_part(data, part_path, filename), "application/xml", download="xml-part.xml"
+                )
             if path == "/api/export":
                 return self.respond(200, xml_bundle(data, filename), "application/zip", download=True)
             self.respond(200, inspect_docx(data, filename))

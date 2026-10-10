@@ -23,5 +23,9 @@ jobs:
         run: python3 -m unittest discover -v
       - name: JavaScript syntax
         run: node --check public/app.js
+      - name: Install UI test dependencies
+        run: npm ci --ignore-scripts
+      - name: UI and API integration tests
+        run: npm test
       - name: Python syntax
         run: python3 -m compileall -q docx_ray api scripts

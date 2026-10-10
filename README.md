@@ -46,7 +46,9 @@ The CLI works offline and accepts documents up to 20 MB.
 
 ## Test and deploy
 
-Run `python -m unittest discover -v` and `node --check public/app.js`.
+Run `python -m unittest discover -v` for Python tests. For UI integration tests, run `npm ci --ignore-scripts` then `npm test`.
+
+UI tests exercise the real API in a DOM environment; they do not check browser layout.
 
 Vercel uses `public/` for the website and `api/index.py` for Python. No database, queue, secrets, or migrations are needed. GitHub CI checks changes on pushes and PRs.
 

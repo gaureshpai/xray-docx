@@ -17,49 +17,45 @@ function status(text, error = false) {
 }
 function setBusy(value) {
   busy = value;
-  for (const id of ['file', 'sample', 'export']) $(id).disabled = value;
+  for (const id of ['file', 'sample', 'export', 'download']) $(id).disabled = value;
+  $('cancel').hidden = !value;
   $('dropzone').setAttribute('aria-busy', String(value));
 }
-async function request(path, file) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
-  try {
-    const response = await fetch(path, {method: 'POST', headers: {
-      'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name)
-    }, body: file, signal: controller.signal});
-    if (!response.ok) {
-      let message = `Request failed (${response.status}).`;
-      try {message = (await response.json()).error || message;} catch { /* Non-JSON platform error. */ }
-      throw new Error(message);
-    }
-    return response;
-  } finally { clearTimeout(timer); }
-}
+const sdk = new window.DocxRayClient(message => status(message));
+let selectionVersion = 0;
 async function inspect(file) {
   if (busy) return;
   if (!file.name.toLowerCase().endsWith('.docx')) return status('Choose a .docx document.', true);
-  if (!file.size || file.size > 3000000) return status('Choose a nonempty document up to 3 MB. Use the CLI for larger files.', true);
+  if (!file.size) return status('Choose a nonempty document.', true);
+  documentResult = null; selectedPart = null; currentFile = null; $('workspace').hidden = true;
   setBusy(true);
   status('Opening the ZIP package and reading its XML…');
   try {
-    const response = await request('/api/inspect', file);
-    const result = await response.json();
+    const result = await sdk.call('inspect', {file, filename:file.name});
     documentResult = result;
     currentFile = file;
-    render();
+    await render();
     status(`Inspected ${result.summary.parts} package parts and ${result.summary.xmlParts} XML parts.`);
     $('workspace').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
   } catch (error) {
     status(error.name === 'AbortError' ? 'Request timed out. Try a smaller document or use the CLI.' : error.message, true);
   } finally {setBusy(false);}
 }
-function selectPart(part) {
+async function selectPart(part) {
+  const version = ++selectionVersion;
   selectedPart = part;
   $('partname').textContent = part.path;
-  $('partinfo').textContent = `${part.bytes.toLocaleString()} bytes · ${part.kind === 'xml' ? 'Decoded source XML · downloads preserve original part bytes' : 'Binary part; shown in the package inventory only'}`;
-  $('xml').textContent = part.kind === 'xml' ? part.xml : 'This is a binary asset, not an XML document.';
-  $('download').disabled = part.kind !== 'xml';
+  $('xml').textContent = 'Reading this part in your browser…';
   renderParts();
+  try {
+    const data = await sdk.call('part', {path:part.path});
+    if (version !== selectionVersion) return;
+    $('partinfo').textContent = `${part.bytes.toLocaleString()} bytes · ${data.note}`;
+    $('xml').textContent = data.xml ?? data.preview;
+    $('download').disabled = false;
+  } catch (error) {
+    if (version === selectionVersion) $('xml').textContent = error.message;
+  }
 }
 function renderParts() {
   const query = $('filter').value.toLowerCase();
@@ -91,7 +87,7 @@ function replay() {
   }
   steps.forEach((step, i) => replayTimers.push(setTimeout(() => step.classList.add('active'), i * 420)));
 }
-function render() {
+async function render() {
   $('workspace').hidden = false;
   $('filename').textContent = documentResult.filename;
   $('filter').value = '';
@@ -108,10 +104,11 @@ function render() {
   }));
   $('paragraphs').replaceChildren(...documentResult.paragraphs.map(paragraph => {
     const button = element('button', paragraph.text || '(empty paragraph)');
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       for (const child of $('paragraphs').children) child.classList.remove('selected');
       button.classList.add('selected');
-      $('snippet').textContent = paragraph.xml;
+      try {$('snippet').textContent = await sdk.call('paragraph', {index:paragraph.index});}
+      catch (error) {$('snippet').textContent = error.message;}
     });
     return button;
   }));
@@ -123,7 +120,13 @@ function render() {
     return card;
   }));
   $('warnings').replaceChildren(...documentResult.warnings.map(warning => element('li', warning)));
-  selectPart(documentResult.parts.find(p => p.path === documentResult.mainPart));
+  $('reviews').replaceChildren(...[...documentResult.comments.map(comment => ({...comment, type:'Comment'})), ...documentResult.revisions].map(review => {
+    const card = element('div', undefined, 'relationship');
+    card.append(element('strong', `${review.type} · ${review.author || 'Unknown author'} · ID ${review.id}`), element('p', review.text || '(formatting / structural change)'), element('pre', review.xml));
+    return card;
+  }));
+  if (!$('reviews').children.length) $('reviews').append(element('p', 'No parsed comments or revision records found. Explore Raw XML for every part.', 'muted'));
+  await selectPart(documentResult.parts.find(p => p.path === documentResult.mainPart));
   showTab('raw');
   replay();
 }
@@ -156,14 +159,14 @@ $('sample').addEventListener('click', async () => {
 $('filter').addEventListener('input', () => {if (documentResult) renderParts();});
 $('replay').addEventListener('click', replay);
 $('download').addEventListener('click', async () => {
-  if (selectedPart?.kind !== 'xml' || busy) return;
+  if (!selectedPart || busy) return;
   const part = selectedPart;
   setBusy(true);
-  status('Preparing the original XML part…');
+  status('Preparing the original part in your browser…');
   try {
-    const response = await request(`/api/part?path=${encodeURIComponent(part.path)}`, currentFile);
-    download(await response.blob(), part.path.split('/').pop());
-    status('Downloaded original XML part bytes.');
+    const bytes = await sdk.call('download', {path:part.path});
+    download(new Blob([bytes], {type:part.contentType}), part.path.split('/').pop());
+    status('Downloaded original part bytes.');
   } catch (error) {status(error.message, true);} finally {setBusy(false);}
 });
 $('export').addEventListener('click', async () => {
@@ -171,8 +174,8 @@ $('export').addEventListener('click', async () => {
   setBusy(true);
   status('Preparing the original XML parts…');
   try {
-    const response = await request('/api/export', currentFile);
-    download(await response.blob(), 'docx-ray-xml.zip');
+    const bytes = await sdk.call('export');
+    download(new Blob([bytes], {type:'application/zip'}), 'docx-ray-xml.zip');
     status('Downloaded XML bundle with original part bytes.');
   } catch (error) {status(error.message, true);} finally {setBusy(false);}
 });
@@ -191,3 +194,5 @@ showTab('raw');
 for (const name of ['dragenter','dragover']) $('dropzone').addEventListener(name, event => {event.preventDefault(); $('dropzone').classList.add('drag');});
 for (const name of ['dragleave','drop']) $('dropzone').addEventListener(name, event => {event.preventDefault(); $('dropzone').classList.remove('drag');});
 $('dropzone').addEventListener('drop', event => {const file = event.dataTransfer.files[0]; if (file) inspect(file);});
+
+$('cancel').addEventListener('click', () => {sdk.cancel(); ++selectionVersion; documentResult = null; currentFile = null; $('workspace').hidden = true; setBusy(false); status('Processing cancelled.');});

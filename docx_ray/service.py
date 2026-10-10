@@ -9,7 +9,7 @@ import zipfile
 from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 
-from .models import WEB_LIMITS, DocxError
+from .models import DEFAULT_LIMITS, DocxError
 
 WORD_NAMESPACES = {
     "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
@@ -67,7 +67,7 @@ def safe_path(name):
     return path
 
 
-def inspect_docx(data, filename="document.docx", limits=WEB_LIMITS):
+def inspect_docx(data, filename="document.docx", limits=DEFAULT_LIMITS):
     if not data or len(data) > limits.input_bytes:
         raise DocxError(f"Document must be between 1 and {limits.input_bytes:,} bytes.")
     if not filename.lower().endswith(".docx"):
@@ -249,7 +249,7 @@ def _inspect(data, filename, limits):
         return result
 
 
-def xml_bundle(data, filename="document.docx", limits=WEB_LIMITS):
+def xml_bundle(data, filename="document.docx", limits=DEFAULT_LIMITS):
     result = inspect_docx(data, filename, limits)
     output = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(data)) as source, zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as target:
@@ -259,7 +259,7 @@ def xml_bundle(data, filename="document.docx", limits=WEB_LIMITS):
     return output.getvalue()
 
 
-def xml_part(data, path, filename="document.docx", limits=WEB_LIMITS):
+def xml_part(data, path, filename="document.docx", limits=DEFAULT_LIMITS):
     """Return original bytes for one validated XML part."""
     result = inspect_docx(data, filename, limits)
     if not any(p["path"] == path and p["kind"] == "xml" for p in result["parts"]):

@@ -1,9 +1,8 @@
-# Python backend and CLI
+# Offline Python CLI
 
-- `models.py`: errors and size limits.
-- `service.py`: inspect a DOCX and export XML.
-- `routes.py`: handle API requests.
-- `server.py`: run the website locally.
-- `cli.py`: run the same engine offline.
+- `models.py`: errors and CLI safety limits.
+- `service.py`: inspect DOCX and export original XML.
+- `cli.py`: offline commands.
+- `server.py`: static files for local website development.
 
-Both the website and CLI call the same service. No production dependencies or database are needed.
+The website does not use Python for conversion. The CLI has no production dependencies.

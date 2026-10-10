@@ -1,7 +1,7 @@
 # Tests
 
-Run `python -m unittest discover -v` from the repository root.
+Run `npm test` for browser SDK and UI tests using the exact worker bundle. Tests include a DOCX larger than the old 3 MB cap, comments, tracked changes, binary parts, exact exports, and no document network requests. The DOM environment does not verify browser layout.
 
-Tests cover XML accuracy, exports, package safety, CLI commands, and real HTTP requests. The fixtures include our synthetic sample and a DOCX from python-docx; its license is in `UPSTREAM-LICENSE`.
+Run `python -m unittest discover -v` for offline CLI, XML safety, exports, and static-server tests.
 
-Run `npm ci --ignore-scripts` and `npm test` for UI integration tests against the real Python API. These test interactions and responses, not browser layout.
+`reviewed.docx` contains a generated comment and synthetic revision markup. The public python-docx fixture retains its license in `UPSTREAM-LICENSE`.

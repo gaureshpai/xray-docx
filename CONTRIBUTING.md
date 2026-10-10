@@ -1,7 +1,7 @@
 # Contributing
 
-Keep extraction rules in `docx_ray/service.py`, resource limits and error models in `models.py`, transport behavior in `routes.py`, and the CLI independent of HTTP. Use Python 3.12+, four-space indentation, explicit resource limits, and context managers for files. The backend has no production third-party dependencies.
+Keep browser extraction in `web/sdk.mjs`, worker messages in `web/worker.mjs`, and UI rendering in `public/`. Python under `docx_ray/` is for the offline CLI and local static hosting.
 
-Never write uploaded ZIP paths to disk, fetch external relationships, log document contents, or insert document XML through `innerHTML`. Raw source XML and reserialized snippets have different contracts; preserve that distinction in tests and UI copy.
+Never send document bytes over the network, fetch external relationships, or insert document content with `innerHTML`. Keep raw XML, original bytes, and reserialized snippets distinct.
 
-Run `python -m unittest discover -v`, `node --check public/app.js`, and `python -m compileall -q docx_ray api scripts` before committing. Add regression cases for altered XML, ZIP safety or response schema changes. Keep examples synthetic, and retain upstream fixture attribution.
+Run `npm test`, `python -m unittest discover -v`, `python -m ruff check .`, and `python -m ruff format --check .`. Add regression tests when changing ZIP/XML handling. Keep fixtures synthetic or attributed.

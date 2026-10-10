@@ -1,13 +1,11 @@
 # How it works
 
-1. The website or CLI receives a DOCX.
-2. The shared engine opens its ZIP package in memory.
-3. It validates the package and reads the XML parts.
-4. It finds the main document using the package relationships.
-5. It maps paragraphs to XML and returns the result.
+1. You choose a DOCX in the browser.
+2. A worker uses the JavaScript SDK to read its ZIP package.
+3. The SDK validates the package and maps text, comments, and revisions.
+4. The page reads XML parts on demand and shows the results.
+5. The worker prepares original part downloads or an XML ZIP.
 
-The website displays the result. The CLI prints it or saves an XML ZIP.
+No document bytes go to a server. Vercel only hosts static assets.
 
-The backend separates models, routes, and document processing. It has no database because there is nothing to store.
-
-The XML ZIP keeps original part bytes. The visual paragraph snippets are reserialized for display. Neither mode changes the input DOCX.
+The Python CLI is separate and works offline. Its extraction service keeps bounded safety defaults.

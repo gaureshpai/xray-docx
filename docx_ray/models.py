@@ -16,5 +16,5 @@ class Limits:
     response_bytes: int = 4_000_000
 
 
-WEB_LIMITS = Limits()
+DEFAULT_LIMITS = Limits()
 CLI_LIMITS = Limits(input_bytes=20_000_000, expanded_bytes=50_000_000, xml_bytes=20_000_000, response_bytes=100_000_000)

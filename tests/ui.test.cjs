@@ -1,10 +1,12 @@
-// DOM integration tests exercise actual app.js against the real Python HTTP API.
+// DOM integration tests exercise actual app.js and the bundled browser worker.
 // JSDOM does not verify browser rendering or downloads on disk.
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {spawn, spawnSync} = require('node:child_process');
 const {JSDOM} = require('jsdom');
+const {Worker:NodeWorker} = require('node:worker_threads');
+const {join} = require('node:path');
 const port = 20000 + Math.floor(Math.random() * 20000);
 const origin = `http://127.0.0.1:${port}`;
 let server;
@@ -19,34 +21,47 @@ async function until(predicate) {
 before(async () => {
   server = spawn(process.env.PYTHON || 'python3', ['-m', 'docx_ray.server', '--port', String(port)], {stdio:'pipe'});
   for (let n = 0; n < 100; n++) {
-    try {if ((await fetch(`${origin}/api/health`)).ok) return;} catch {}
+    try {if ((await fetch(`${origin}/`)).ok) return;} catch {}
     await pause(30);
   }
-  throw new Error('Python API did not start.');
+  throw new Error('Static asset server did not start.');
 });
 after(() => server?.kill());
 function app() {
   const dom = new JSDOM(fs.readFileSync('public/index.html', 'utf8'), {url:origin, runScripts:'outside-only'});
   const window = dom.window;
   const downloads = [];
+  const requests = [];
+  const workers = [];
   const blobs = new Map();
   let nextUrl = 0;
   window.File = File;
   window.Blob = Blob;
   window.AbortController = AbortController;
-  window.fetch = (url, options) => fetch(new URL(url, origin), options);
+  window.fetch = (url, options) => {requests.push({url:String(url), options}); return fetch(new URL(url, origin), options);};
+  window.Worker = class {
+    constructor() {
+      this.thread = new NodeWorker(join(__dirname, 'worker-thread.cjs'));
+      workers.push(this.thread);
+      this.thread.on('message', data => this.onmessage?.({data}));
+      this.thread.on('error', error => this.onerror?.(error));
+    }
+    postMessage(data) {this.thread.postMessage(data);}
+    terminate() {this.thread.terminate();}
+  };
   window.matchMedia = () => ({matches:true});
   window.HTMLElement.prototype.scrollIntoView = () => {};
   window.URL.createObjectURL = blob => {const url = `blob:test-${nextUrl++}`; blobs.set(url, blob); return url;};
   window.URL.revokeObjectURL = url => blobs.delete(url);
   window.HTMLAnchorElement.prototype.click = function() {downloads.push({name:this.download, blob:blobs.get(this.href)});};
+  window.eval(fs.readFileSync('public/sdk-client.js', 'utf8'));
   window.eval(fs.readFileSync('public/app.js', 'utf8'));
   const $ = id => window.document.getElementById(id);
   function upload(data, name='uploaded.docx') {
     Object.defineProperty($('file'), 'files', {configurable:true, value:[new File([data], name)]});
     $('file').dispatchEvent(new window.Event('change'));
   }
-  return {window, $, downloads, upload, close:() => window.close()};
+  return {window, $, downloads, requests, upload, close:() => {workers.forEach(worker => worker.terminate()); window.close();}};
 }
 async function sample(ui) {
   ui.$('sample').click();
@@ -73,9 +88,11 @@ test('filter and keyboard tabs expose paragraph-to-XML mapping and relationships
     assert.equal(ui.$('parts').children.length, 1);
     ui.$('parts').firstChild.click();
     assert.equal(ui.$('partname').textContent, 'word/styles.xml');
+    await until(() => ui.$('xml').textContent.includes('<w:styles'));
     ui.$('raw-tab').dispatchEvent(new ui.window.KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
     assert.equal(ui.$('visual-panel').hidden, false);
     ui.$('paragraphs').children[1].click();
+    await until(() => ui.$('snippet').textContent.includes('Hello from DOCX Ray'));
     assert.match(ui.$('snippet').textContent, /Hello from DOCX Ray/);
     ui.$('relations-tab').click();
     assert.equal(ui.$('relations-panel').hidden, false);
@@ -98,24 +115,22 @@ test('all-parts and single-part downloads contain original bytes', async () => {
     assert.equal(String.fromCharCode(...bytes.slice(0,2)), 'PK');
   } finally {ui.close();}
 });
-test('invalid files and oversized files show useful errors', async () => {
+test('invalid files show useful errors', async () => {
   const ui = app();
   try {
     ui.upload('text', 'wrong.doc');
     assert.match(ui.$('status').textContent, /Choose a .docx/);
-    ui.upload(new Uint8Array(3000001));
-    assert.match(ui.$('status').textContent, /up to 3 MB/);
     ui.upload('not a zip');
     await until(() => ui.$('status').classList.contains('error') && !ui.$('file').disabled);
     assert.match(ui.$('status').textContent, /Invalid.*ZIP/);
     assert.equal(ui.$('workspace').hidden, true);
   } finally {ui.close();}
 });
-test('failed API requests clear busy state', async () => {
+test('failed sample downloads clear busy state', async () => {
   const ui = app();
   try {
     ui.window.fetch = async () => {throw new Error('Network unavailable');};
-    ui.upload(fs.readFileSync('public/sample.docx'));
+    ui.$('sample').click();
     await until(() => ui.$('status').textContent === 'Network unavailable');
     assert.equal(ui.$('file').disabled, false);
     assert.equal(ui.$('sample').disabled, false);
@@ -140,5 +155,35 @@ sys.stdout.buffer.write(out.getvalue())`]);
     assert.match(ui.$('paragraphs').textContent, /<img src=x/);
     assert.equal(ui.$('paragraphs').querySelectorAll('img').length, 0);
     assert.equal(ui.$('xml').querySelectorAll('img').length, 0);
+  } finally {ui.close();}
+});
+
+test('uploads and exports send no document bytes over the network', async () => {
+  const ui = app();
+  try {
+    ui.upload(fs.readFileSync('tests/reviewed.docx'));
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    ui.$('reviews-tab').click();
+    assert.match(ui.$('reviews').textContent, /Check this wording/);
+    assert.match(ui.$('reviews').textContent, /Deleted words/);
+    ui.$('export').click();
+    await until(() => ui.downloads.length === 1);
+    assert.equal(ui.requests.length, 0);
+  } finally {ui.close();}
+});
+
+test('the UI accepts a valid document above the former 3 MB cap', async () => {
+  const JSZip = require('jszip');
+  const {randomBytes} = require('node:crypto');
+  const archive = await JSZip.loadAsync(fs.readFileSync('public/sample.docx'));
+  archive.file('word/media/large.bin',randomBytes(4_000_000));
+  const bytes = await archive.generateAsync({type:'uint8array',compression:'STORE'});
+  const ui = app();
+  try {
+    ui.upload(bytes, 'large.docx');
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    assert.equal(ui.$('filename').textContent,'large.docx');
+    assert.match(ui.$('parts').textContent,/large.bin/);
+    assert.equal(ui.requests.length,0);
   } finally {ui.close();}
 });

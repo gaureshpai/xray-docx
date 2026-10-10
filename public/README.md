@@ -1,5 +1,5 @@
-# Website
+# Client-only website
 
-Plain HTML, CSS, and JavaScript. No frontend framework or build step.
+Plain HTML, CSS, and JavaScript. DOCX processing happens in a worker built from `web/`.
 
-Upload a DOCX, explore its parts, map text to XML, and download XML. `sample.docx` contains synthetic demo content.
+Run `npm run build` to produce `worker.js`. Selected documents are not uploaded. XML, comments, revisions, and binary parts can be explored locally.

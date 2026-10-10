@@ -1,0 +1,162 @@
+/** Browser-compatible OOXML SDK. No network calls and no application size caps. */
+import JSZip from 'jszip';
+import {DOMParser, XMLSerializer} from '@xmldom/xmldom';
+
+const WORD = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']);
+const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
+const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
+const attr = (node, ns, name) => node.getAttributeNS(ns, name) || '';
+const normalize = value => {
+  const parts = [];
+  for (const part of value.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {if (!parts.length) throw new Error('Relationship escapes the package.'); parts.pop();}
+    else parts.push(part);
+  }
+  return parts.join('/');
+};
+function decode(bytes) {
+  let encoding = 'utf-8';
+  let skip = 0;
+  const le32 = bytes[0] === 0xff && bytes[1] === 0xfe && bytes[2] === 0 && bytes[3] === 0;
+  const be32 = bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 0xfe && bytes[3] === 0xff;
+  if (le32 || be32) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if ((bytes.length - 4) % 4) throw new Error('Invalid UTF-32 XML.');
+    let output = '', points = [];
+    for (let offset = 4; offset < bytes.length; offset += 4) {
+      const point = view.getUint32(offset, le32);
+      if (point > 0x10ffff || (point >= 0xd800 && point <= 0xdfff)) throw new Error('Invalid UTF-32 code point.');
+      points.push(point);
+      if (points.length === 8192) {output += String.fromCodePoint(...points); points = [];}
+    }
+    return output + String.fromCodePoint(...points);
+  }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {encoding = 'utf-16le'; skip = 2;}
+  else if (bytes[0] === 0xfe && bytes[1] === 0xff) {encoding = 'utf-16be'; skip = 2;}
+  else if (bytes[0] === 0 && bytes[1] === 0x3c) encoding = 'utf-16be';
+  else if (bytes[0] === 0x3c && bytes[1] === 0) encoding = 'utf-16le';
+  else {
+    const declaration = new TextDecoder().decode(bytes.slice(0, 256)).match(/<\?xml[^>]*encoding\s*=\s*['"]([^'"]+)['"]/i);
+    if (declaration) encoding = declaration[1];
+  }
+  return new TextDecoder(encoding, {fatal:true}).decode(bytes.subarray(skip));
+}
+function parse(text) {
+  if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('DTD/entity declarations are not parsed. Original XML can still be viewed and downloaded.');
+  return new DOMParser({onError:(level, message) => {if (level !== 'warning') throw new Error(message);}}).parseFromString(text, 'application/xml');
+}
+function hex(bytes) {
+  const lines = [];
+  for (let offset = 0; offset < Math.min(bytes.length, 512); offset += 16) {
+    const row = bytes.subarray(offset, offset + 16);
+    lines.push(`${offset.toString(16).padStart(8, '0')}  ${[...row].map(b => b.toString(16).padStart(2, '0')).join(' ').padEnd(47)}  ${[...row].map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : '.').join('')}`);
+  }
+  return lines.join('\n');
+}
+export class DocxRaySDK {
+  constructor() {this.archive = null; this.parts = []; this.paragraphNodes = [];}
+  async inspect(input, filename='document.docx', progress=() => {}) {
+    if (!filename.toLowerCase().endsWith('.docx')) throw new Error('Choose a .docx document.');
+    this.archive = null;
+    this.parts = [];
+    this.paragraphNodes = [];
+    const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+    if (!bytes.length) throw new Error('Choose a nonempty document.');
+    progress('Opening the ZIP package and verifying entry CRCs…');
+    let archive;
+    try {archive = await JSZip.loadAsync(bytes, {checkCRC32:true, createFolders:false});}
+    catch (error) {throw new Error(`Invalid, corrupt, encrypted or unsupported ZIP: ${error.message}`);}
+    const entries = Object.values(archive.files).filter(file => !file.dir);
+    for (const file of entries) {
+      const name = file.unsafeOriginalName || file.name;
+      if (name !== file.name || name.startsWith('/') || name.includes('\\') || name.split('/').includes('..')) throw new Error('Unsafe archive path.');
+    }
+    if (!archive.file('[Content_Types].xml') || !archive.file('_rels/.rels')) throw new Error('Not an OOXML package: content types and relationships are required.');
+    this.archive = archive;
+    const types = parse(decode(await archive.file('[Content_Types].xml').async('uint8array')));
+    if (types.documentElement.namespaceURI !== CONTENT || types.documentElement.localName !== 'Types') throw new Error('Invalid package content types.');
+    const overrides = new Map(), defaults = new Map();
+    for (const item of localChildren(types.documentElement)) {
+      if (item.localName === 'Override') overrides.set(item.getAttribute('PartName').replace(/^\//,''), item.getAttribute('ContentType'));
+      if (item.localName === 'Default') defaults.set(item.getAttribute('Extension').toLowerCase(), item.getAttribute('ContentType'));
+    }
+    const relationships = [], warnings = [];
+    let mainPart;
+    progress('Reading package relationships…');
+    for (const file of entries.filter(file => file.name.endsWith('.rels'))) {
+      let root;
+      try {root = parse(decode(await file.async('uint8array'))).documentElement;}
+      catch (error) {warnings.push(`${file.name}: ${error.message}`); continue;}
+      const source = file.name === '_rels/.rels' ? '/' : file.name.replace(/(^|\/)\_rels\//, '$1').replace(/\.rels$/, '');
+      for (const item of localChildren(root)) {
+        if (item.localName !== 'Relationship') continue;
+        const target = item.getAttribute('Target');
+        const external = item.getAttribute('TargetMode') === 'External';
+        const base = source === '/' || target.startsWith('/') ? '' : source.slice(0, source.lastIndexOf('/') + 1);
+        let resolved = null;
+        if (!external) resolved = normalize(base + target);
+        const relation = {source, target, external, resolved, id:item.getAttribute('Id'), type:item.getAttribute('Type').split('/').pop(), exists:external ? null : Boolean(archive.file(resolved))};
+        relationships.push(relation);
+        if (source === '/' && relation.type === 'officeDocument' && !external) mainPart = resolved;
+      }
+    }
+    if (!mainPart || !archive.file(mainPart) || overrides.get(mainPart) !== MAIN_TYPE) throw new Error('This package does not contain a macro-free DOCX main document.');
+    // Size metadata uses the pinned JSZip entry representation.
+    // Regression tests compare these values with actual uncompressed bytes.
+    const parts = entries.map(file => {
+      const contentType = overrides.get(file.name) || defaults.get(file.name.split('.').pop().toLowerCase()) || 'application/octet-stream';
+      return {path:file.name, kind:/\.(xml|rels)$/i.test(file.name) || /xml/i.test(contentType) ? 'xml' : 'binary', contentType,
+        bytes:file._data?.uncompressedSize ?? 0, compressedBytes:file._data?.compressedSize ?? 0};
+    });
+    this.parts = parts;
+    progress('Mapping document text, comments and tracked changes…');
+    const main = parse(decode(await archive.file(mainPart).async('uint8array'))).documentElement;
+    if (main.localName !== 'document' || !WORD.has(main.namespaceURI)) throw new Error('Invalid WordprocessingML document root.');
+    const ns = main.namespaceURI;
+    this.paragraphNodes = list(main, ns, 'p');
+    const paragraphs = this.paragraphNodes.map((node, index) => ({index, text:list(node, ns, 't').map(text => text.textContent).join('')}));
+    const revisions = [];
+    for (const type of ['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','sectPrChange']) {
+      for (const node of list(main, ns, type)) revisions.push({type, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
+        text:[...list(node, ns, 't'), ...list(node, ns, 'delText')].map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
+    }
+    const comments = [];
+    for (const part of parts.filter(part => /(^|\/)comments[^/]*\.xml$/i.test(part.path))) {
+      try {
+        const document = parse(decode(await archive.file(part.path).async('uint8array')));
+        for (const node of list(document, ns, 'comment')) comments.push({part:part.path, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
+          text:list(node, ns, 't').map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
+      } catch (error) {warnings.push(`${part.path}: ${error.message}`);}
+    }
+    warnings.push('The text view is a projection, not a Word layout renderer. Deleted text appears under Reviews and Raw XML.', 'Paragraph and review snippets are reserialized. Raw XML and downloads retain the original part contents.', 'No application file-size cap. Available browser memory and ZIP/encoding support set practical limits.');
+    if (relationships.some(rel => rel.external)) warnings.push('External relationships are displayed only, never fetched.');
+    return {filename, mainPart, compressedBytes:bytes.length, expandedBytes:parts.reduce((sum, part) => sum + part.bytes,0), parts, relationships, paragraphs, revisions, comments, warnings,
+      summary:{parts:parts.length, xmlParts:parts.filter(part => part.kind === 'xml').length, paragraphs:paragraphs.length, runs:list(main,ns,'r').length, tables:list(main,ns,'tbl').length, media:parts.filter(part => part.path.includes('/media/')).length},
+      steps:[{title:'Open ZIP container',detail:`${bytes.length.toLocaleString()} bytes read in your browser.`},{title:'Validate package',detail:'Verified CRCs, package paths and content types.'},{title:'Locate document',detail:`Main document: ${mainPart}.`},{title:'Explore package parts',detail:`${parts.length} files; XML is decoded on demand.`},{title:'Map text and reviews',detail:`${paragraphs.length} paragraphs, ${comments.length} comments, ${revisions.length} revision records.`}]};
+  }
+  async part(path) {
+    const metadata = this.parts.find(part => part.path === path);
+    if (!metadata) throw new Error('Package part not found.');
+    const bytes = await this.archive.file(path).async('uint8array');
+    if (metadata.kind === 'binary') return {...metadata, preview:hex(bytes), note:'Hex preview of the first 512 bytes. Download the full original part.'};
+    try {return {...metadata, xml:decode(bytes), note:'Decoded source XML. Download preserves original bytes and encoding.'};}
+    catch (error) {return {...metadata, preview:hex(bytes), note:error.message};}
+  }
+  paragraph(index) {
+    const node = this.paragraphNodes[index];
+    if (!node) throw new Error('Paragraph not found.');
+    return new XMLSerializer().serializeToString(node);
+  }
+  async download(path) {
+    if (!this.parts.some(part => part.path === path)) throw new Error('Package part not found.');
+    return this.archive.file(path).async('uint8array');
+  }
+  async exportXml() {
+    const output = new JSZip();
+    for (const part of this.parts.filter(part => part.kind === 'xml')) output.file(part.path, await this.download(part.path));
+    return output.generateAsync({type:'uint8array', compression:'DEFLATE'});
+  }
+}

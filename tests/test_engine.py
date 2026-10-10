@@ -10,7 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from docx_ray.models import WEB_LIMITS, DocxError
+from docx_ray.models import DEFAULT_LIMITS, DocxError
 from docx_ray.service import inspect_docx, parse_xml, xml_bundle, xml_part
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +122,7 @@ class EngineTests(unittest.TestCase):
             ("response_bytes", 1),
         ]:
             with self.subTest(field=field), self.assertRaises(DocxError):
-                inspect_docx(SAMPLE, limits=replace(WEB_LIMITS, **{field: value}))
+                inspect_docx(SAMPLE, limits=replace(DEFAULT_LIMITS, **{field: value}))
 
     def test_external_reference_not_fetched(self):
         with zipfile.ZipFile(io.BytesIO(SAMPLE)) as archive:

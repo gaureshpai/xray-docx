@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.vercel/
+*.egg-info/
+build/
+dist/
+.env*
+playwright-report/
+test-results/
+
+.ruff_cache/

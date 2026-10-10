@@ -1,0 +1,27 @@
+name: Verify DOCX Ray
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check Python version
+        run: python3 --version
+      - name: Install code quality tool
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Code standards
+        run: |
+          python3 -m ruff check .
+          python3 -m ruff format --check .
+      - name: Engine, security, CLI and HTTP regression tests
+        run: python3 -m unittest discover -v
+      - name: JavaScript syntax
+        run: node --check public/app.js
+      - name: Python syntax
+        run: python3 -m compileall -q docx_ray api scripts

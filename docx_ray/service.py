@@ -36,6 +36,8 @@ def parse_xml(raw):
             text = raw.decode("utf-8-sig")
     except UnicodeError as exc:
         raise DocxError("XML must use UTF-8 or BOM-marked UTF-16/32.") from exc
+    if "\x00" in text:
+        raise DocxError("XML contains null bytes or an unsupported encoding.")
     if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
         raise DocxError("DTD and entity declarations are not accepted.")
     try:

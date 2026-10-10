@@ -10,3 +10,4 @@ playwright-report/
 test-results/
 
 .ruff_cache/
+node_modules/

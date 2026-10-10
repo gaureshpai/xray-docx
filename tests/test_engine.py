@@ -88,7 +88,7 @@ class EngineTests(unittest.TestCase):
 
     def test_entity_declarations_all_encodings(self):
         value = '<!DOCTYPE root [<!ENTITY x "boom">]><root>&x;</root>'
-        for encoding in ["utf-8", "utf-16", "utf-32"]:
+        for encoding in ["utf-8", "utf-16", "utf-32", "utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be"]:
             with self.subTest(encoding=encoding), self.assertRaises(DocxError):
                 parse_xml(value.encode(encoding))
 

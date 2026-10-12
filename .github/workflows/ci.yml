@@ -30,5 +30,9 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Browser SDK and UI integration tests
         run: npm test
+      - name: Install browser engines
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Real-browser upload, inspection, cancellation and download tests
+        run: npm run test:e2e
       - name: Python syntax
         run: python3 -m compileall -q docx_ray scripts

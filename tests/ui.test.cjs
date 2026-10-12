@@ -187,3 +187,36 @@ test('the UI accepts a valid document above the former 3 MB cap', async () => {
     assert.equal(ui.requests.length,0);
   } finally {ui.close();}
 });
+
+test('cancelled sample fetch cannot reopen a document after it resolves', async () => {
+  const ui = app();
+  try {
+    let finish;
+    ui.window.fetch = () => new Promise(resolve => {finish = resolve;});
+    ui.$('sample').click();
+    ui.$('cancel').click();
+    finish({ok:true, blob:async () => new Blob([fs.readFileSync('public/sample.docx')])});
+    await pause(500);
+    assert.equal(ui.$('workspace').hidden, true);
+    assert.equal(ui.$('status').textContent, 'Processing cancelled.');
+    assert.equal(ui.$('export').disabled, true);
+    ui.upload(fs.readFileSync('tests/reviewed.docx'), 'after-cancel.docx');
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    assert.equal(ui.$('filename').textContent, 'after-cancel.docx');
+  } finally {ui.close();}
+});
+
+test('cancelled worker operation stays cancelled and can recover with a new file', async () => {
+  const ui = app();
+  try {
+    ui.upload(fs.readFileSync('public/sample.docx'));
+    ui.$('cancel').click();
+    await pause(50);
+    assert.equal(ui.$('status').textContent, 'Processing cancelled.');
+    assert.equal(ui.$('workspace').hidden, true);
+    assert.equal(ui.$('download').disabled, true);
+    ui.upload(fs.readFileSync('tests/reviewed.docx'));
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    assert.match(ui.$('reviews').textContent, /Check this wording/);
+  } finally {ui.close();}
+});

@@ -66,8 +66,9 @@ function decode(bytes) {
   return new TextDecoder(encoding, {fatal:true}).decode(bytes.subarray(skip));
 }
 function parse(text) {
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(text)) throw new Error('XML contains a forbidden control character.');
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('DTD/entity declarations are not parsed. Original XML can still be viewed and downloaded.');
-  return new DOMParser({onError:(level, message) => {if (level !== 'warning') throw new Error(message);}}).parseFromString(text, 'application/xml');
+  return new DOMParser({onError:(_level, message) => {throw new Error(`Malformed XML: ${message}`);}}).parseFromString(text, 'application/xml');
 }
 function hex(bytes) {
   const lines = [];

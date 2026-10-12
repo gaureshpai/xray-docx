@@ -34,5 +34,13 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
       - name: Real-browser upload, inspection, cancellation and download tests
         run: npm run test:e2e
+      - name: Keep synthetic browser screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Python syntax
         run: python3 -m compileall -q docx_ray scripts

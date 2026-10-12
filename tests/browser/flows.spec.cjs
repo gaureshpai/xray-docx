@@ -80,6 +80,15 @@ test('invalid files fail visibly and a subsequent document succeeds', async ({pa
   await upload(page);
 });
 
+test('malformed main XML reports an error without showing a repaired document', async ({page}) => {
+  const zip = await JSZip.loadAsync(sample);
+  zip.file('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p w:rsidR=123/></w:body></w:document>');
+  await page.locator('#file').setInputFiles({name:'malformed.docx',mimeType:'application/octet-stream',buffer:await zip.generateAsync({type:'nodebuffer'})});
+  await expect(page.locator('#status')).toContainText('Malformed XML');
+  await expect(page.locator('#workspace')).toBeHidden();
+  await upload(page);
+});
+
 test('cancel sample loading and ignore its late response', async ({page}) => {
   let finish;
   const hold = new Promise(resolve => {finish = resolve;});

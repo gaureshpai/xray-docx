@@ -43,3 +43,5 @@ For real-browser checks, run `npx playwright install chromium firefox webkit`, t
 Vercel builds with `npm run build` and serves `public/`. No conversion functions, database, secrets, or migrations.
 
 See the [architecture guide](docs/architecture.md), [technical details](docs/technical.md), and [contribution rules](CONTRIBUTING.md).
+
+For the current audit branch and a short manual checklist, see [audit testing](docs/audit-testing.md).

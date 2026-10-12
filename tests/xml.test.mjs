@@ -30,3 +30,19 @@ test('malformed optional review XML stays available as raw bytes with a warning'
   assert.equal((await sdk.part('word/comments.xml')).xml, raw);
   assert.deepEqual(await sdk.download('word/comments.xml'), new TextEncoder().encode(raw));
 });
+
+test('legal replacement-character text remains visible in the main document and comments', async () => {
+  const zip = await JSZip.loadAsync(await fixture('word/document.xml', `<w:document xmlns:w="${WORD}"><w:body><w:p><w:r><w:t>legal \ufffd text</w:t></w:r></w:p></w:body></w:document>`));
+  const comment = `<w:comments xmlns:w="${WORD}"><w:comment w:id="1"><w:p><w:r><w:t>comment \ufffd text</w:t></w:r></w:p></w:comment></w:comments>`;
+  zip.file('word/comments.xml', comment);
+  const sdk = new DocxRaySDK();
+  const result = await sdk.inspect(await zip.generateAsync({type:'uint8array'}));
+  assert.equal(result.paragraphs[0].text, 'legal \ufffd text');
+  assert.equal(result.comments[0].text, 'comment \ufffd text');
+  assert.deepEqual(await sdk.download('word/comments.xml'), new TextEncoder().encode(comment));
+});
+
+test('replacement-character text does not hide malformed markup', async () => {
+  const bytes = await fixture('word/document.xml', `<w:document xmlns:w="${WORD}"><w:body><w:p w:rsidR=123><w:r><w:t>\ufffd</w:t></w:r></w:p></w:body></w:document>`);
+  await assert.rejects(new DocxRaySDK().inspect(bytes), /Malformed XML/);
+});

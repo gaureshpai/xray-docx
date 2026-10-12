@@ -86,6 +86,9 @@ test('malformed main XML reports an error without showing a repaired document', 
   await page.locator('#file').setInputFiles({name:'malformed.docx',mimeType:'application/octet-stream',buffer:await zip.generateAsync({type:'nodebuffer'})});
   await expect(page.locator('#status')).toContainText('Malformed XML');
   await expect(page.locator('#workspace')).toBeHidden();
+  zip.file('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Legal \ufffd text</w:t></w:r></w:p></w:body></w:document>');
+  await upload(page, await zip.generateAsync({type:'nodebuffer'}), 'legal-unicode.docx');
+  await expect(page.locator('#paragraphs')).toContainText('Legal \ufffd text');
   await upload(page);
 });
 

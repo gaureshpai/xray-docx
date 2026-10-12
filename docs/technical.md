@@ -10,6 +10,8 @@ No fixed website cap is imposed on file size, expanded size, entry count, or res
 
 ## What is preserved
 
+The paragraph projection retains tabs and line breaks and omits deleted/moved-from text. Reviews retain source order within each part and label their original package path. Comment parts are discovered by content types and relationships; common revision records are inspected across WordprocessingML parts, including headers and footers. Raw XML remains the complete source for markup beyond the parsed review records.
+
 Raw parts retain decoded source XML without pretty-printing or reserialization. Original downloads and XML ZIP exports retain source part bytes. Binary parts have a 512-byte hex preview and a full original download. The XML ZIP excludes binary files by design.
 
 UTF-8, browser-supported declared encodings, UTF-16, and BOM-marked UTF-32 are decoded. An undecodable part remains available as bytes and hex. Paragraph and review snippets are reserialized and can have different namespace formatting.

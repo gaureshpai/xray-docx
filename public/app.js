@@ -123,6 +123,7 @@ async function render() {
   $('reviews').replaceChildren(...[...documentResult.comments.map(comment => ({...comment, type:'Comment'})), ...documentResult.revisions].map(review => {
     const card = element('div', undefined, 'relationship');
     card.append(element('strong', `${review.type} · ${review.author || 'Unknown author'} · ID ${review.id}`), element('p', review.text || '(formatting / structural change)'), element('pre', review.xml));
+    card.append(element('small', `${review.part}${review.date ? ` · ${review.date}` : ''}`));
     return card;
   }));
   if (!$('reviews').children.length) $('reviews').append(element('p', 'No parsed comments or revision records found. Explore Raw XML for every part.', 'muted'));

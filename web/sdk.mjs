@@ -10,6 +10,25 @@ const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
 const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
 const attr = (node, ns, name) => node.getAttributeNS(ns, name) || '';
+const REVISION_TYPES = new Set(['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','tblGridChange','trPrChange','tcPrChange','sectPrChange','numberingChange','cellIns','cellDel','cellMerge','customXmlInsRangeStart','customXmlDelRangeStart','customXmlMoveFromRangeStart','customXmlMoveToRangeStart']);
+function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
+  const chunks = [], stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.nodeType !== 1) continue;
+    if (WORD.has(node.namespaceURI)) {
+      if (!removed && ['del','moveFrom'].includes(node.localName)) continue;
+      if (!nestedParagraphs && node !== root && node.localName === 'p') continue;
+      if (node.localName === 't' || (removed && node.localName === 'delText')) {chunks.push(node.textContent); continue;}
+      if (node.localName === 'tab') chunks.push('\t');
+      if (['br','cr'].includes(node.localName)) chunks.push('\n');
+      if (node.localName === 'noBreakHyphen') chunks.push('\u2011');
+      if (node.localName === 'softHyphen') chunks.push('\u00ad');
+    }
+    stack.push(...localChildren(node).reverse());
+  }
+  return chunks.join('');
+}
 const normalize = value => {
   const parts = [];
   for (const part of value.split('/')) {
@@ -137,18 +156,26 @@ export class DocxRaySDK {
     if (main.localName !== 'document' || !WORD.has(main.namespaceURI)) throw new Error('Invalid WordprocessingML document root.');
     const ns = main.namespaceURI;
     const paragraphNodes = list(main, ns, 'p');
-    const paragraphs = paragraphNodes.map((node, index) => ({index, text:list(node, ns, 't').map(text => text.textContent).join('')}));
-    const revisions = [];
-    for (const type of ['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','sectPrChange']) {
-      for (const node of list(main, ns, type)) revisions.push({type, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
-        text:[...list(node, ns, 't'), ...list(node, ns, 'delText')].map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
-    }
-    const comments = [];
-    for (const part of parts.filter(part => /(^|\/)comments[^/]*\.xml$/i.test(part.path))) {
+    const paragraphs = paragraphNodes.map((node, index) => ({index, text:textProjection(node, {nestedParagraphs:false})}));
+    const revisions = [], comments = [];
+    const commentTargets = new Set(relationships.filter(rel => !rel.external && rel.type === 'comments').map(rel => rel.resolved));
+    const reviewParts = parts.filter(part => part.path === mainPart || part.contentType.includes('wordprocessingml') || commentTargets.has(part.path) || /(^|\/)comments[^/]*\.xml$/i.test(part.path));
+    for (const part of reviewParts.filter(part => part.kind === 'xml')) {
       try {
-        const document = parse(decode(await archive.file(part.path).async('uint8array')));
-        for (const node of list(document, ns, 'comment')) comments.push({part:part.path, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
-          text:list(node, ns, 't').map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
+        const root = part.path === mainPart ? main : parse(decode(await archive.file(part.path).async('uint8array'))).documentElement;
+        const stack = [root];
+        while (stack.length) {
+          const node = stack.pop();
+          if (WORD.has(node.namespaceURI)) {
+            const type = node.localName, nodeNs = node.namespaceURI;
+            if (type === 'comment' || REVISION_TYPES.has(type)) {
+              const record = {part:part.path, id:attr(node, nodeNs, 'id'), author:attr(node, nodeNs, 'author'), date:attr(node, nodeNs, 'date'),
+                text:textProjection(node, {removed:true}), xml:new XMLSerializer().serializeToString(node)};
+              if (type === 'comment') comments.push(record); else revisions.push({...record, type});
+            }
+          }
+          stack.push(...localChildren(node).reverse());
+        }
       } catch (error) {warnings.push(`${part.path}: ${error.message}`);}
     }
     warnings.push('The text view is a projection, not a Word layout renderer. Deleted text appears under Reviews and Raw XML.', 'Paragraph and review snippets are reserialized. Raw XML and downloads retain the original part contents.', 'No application file-size cap. Available browser memory and ZIP/encoding support set practical limits.');

@@ -4,6 +4,8 @@ import {DOMParser, XMLSerializer} from '@xmldom/xmldom';
 
 const WORD = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']);
 const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = new Set(['http://schemas.openxmlformats.org/package/2006/relationships','http://purl.oclc.org/ooxml/package/relationships']);
+const OFFICE_DOCUMENT = new Set(['http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument','http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument']);
 const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
 const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
@@ -59,10 +61,20 @@ function hex(bytes) {
 export class DocxRaySDK {
   constructor() {this.archive = null; this.parts = []; this.paragraphNodes = [];}
   async inspect(input, filename='document.docx', progress=() => {}) {
-    if (!filename.toLowerCase().endsWith('.docx')) throw new Error('Choose a .docx document.');
     this.archive = null;
     this.parts = [];
     this.paragraphNodes = [];
+    try {return await this.#inspectPackage(input, filename, progress);}
+    catch (error) {
+      this.archive = null; this.parts = []; this.paragraphNodes = [];
+      throw error;
+    }
+  }
+  requireDocument() {
+    if (!this.archive) throw new Error('Inspect a valid document first.');
+  }
+  async #inspectPackage(input, filename, progress) {
+    if (!filename.toLowerCase().endsWith('.docx')) throw new Error('Choose a .docx document.');
     const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
     if (!bytes.length) throw new Error('Choose a nonempty document.');
     progress('Opening the ZIP package and verifying entry CRCs…');
@@ -75,11 +87,11 @@ export class DocxRaySDK {
       if (name !== file.name || name.startsWith('/') || name.includes('\\') || name.split('/').includes('..')) throw new Error('Unsafe archive path.');
     }
     if (!archive.file('[Content_Types].xml') || !archive.file('_rels/.rels')) throw new Error('Not an OOXML package: content types and relationships are required.');
-    this.archive = archive;
     const types = parse(decode(await archive.file('[Content_Types].xml').async('uint8array')));
     if (types.documentElement.namespaceURI !== CONTENT || types.documentElement.localName !== 'Types') throw new Error('Invalid package content types.');
     const overrides = new Map(), defaults = new Map();
     for (const item of localChildren(types.documentElement)) {
+      if (item.namespaceURI !== CONTENT) continue;
       if (item.localName === 'Override') overrides.set(item.getAttribute('PartName').replace(/^\//,''), item.getAttribute('ContentType'));
       if (item.localName === 'Default') defaults.set(item.getAttribute('Extension').toLowerCase(), item.getAttribute('ContentType'));
     }
@@ -88,11 +100,17 @@ export class DocxRaySDK {
     progress('Reading package relationships…');
     for (const file of entries.filter(file => file.name.endsWith('.rels'))) {
       let root;
-      try {root = parse(decode(await file.async('uint8array'))).documentElement;}
-      catch (error) {warnings.push(`${file.name}: ${error.message}`); continue;}
+      try {
+        root = parse(decode(await file.async('uint8array'))).documentElement;
+        if (root.localName !== 'Relationships' || !REL.has(root.namespaceURI)) throw new Error('Invalid package relationships XML.');
+      }
+      catch (error) {
+        if (file.name === '_rels/.rels') throw error;
+        warnings.push(`${file.name}: ${error.message}`); continue;
+      }
       const source = file.name === '_rels/.rels' ? '/' : file.name.replace(/(^|\/)\_rels\//, '$1').replace(/\.rels$/, '');
       for (const item of localChildren(root)) {
-        if (item.localName !== 'Relationship') continue;
+        if (item.localName !== 'Relationship' || item.namespaceURI !== root.namespaceURI) continue;
         const target = item.getAttribute('Target');
         const external = item.getAttribute('TargetMode') === 'External';
         const base = source === '/' || target.startsWith('/') ? '' : source.slice(0, source.lastIndexOf('/') + 1);
@@ -100,7 +118,10 @@ export class DocxRaySDK {
         if (!external) resolved = normalize(base + target);
         const relation = {source, target, external, resolved, id:item.getAttribute('Id'), type:item.getAttribute('Type').split('/').pop(), exists:external ? null : Boolean(archive.file(resolved))};
         relationships.push(relation);
-        if (source === '/' && relation.type === 'officeDocument' && !external) mainPart = resolved;
+        if (source === '/' && OFFICE_DOCUMENT.has(item.getAttribute('Type')) && !external) {
+          if (mainPart) throw new Error('Multiple main document relationships.');
+          mainPart = resolved;
+        }
       }
     }
     if (!mainPart || !archive.file(mainPart) || overrides.get(mainPart) !== MAIN_TYPE) throw new Error('This package does not contain a macro-free DOCX main document.');
@@ -111,13 +132,12 @@ export class DocxRaySDK {
       return {path:file.name, kind:/\.(xml|rels)$/i.test(file.name) || /xml/i.test(contentType) ? 'xml' : 'binary', contentType,
         bytes:file._data?.uncompressedSize ?? 0, compressedBytes:file._data?.compressedSize ?? 0};
     });
-    this.parts = parts;
     progress('Mapping document text, comments and tracked changes…');
     const main = parse(decode(await archive.file(mainPart).async('uint8array'))).documentElement;
     if (main.localName !== 'document' || !WORD.has(main.namespaceURI)) throw new Error('Invalid WordprocessingML document root.');
     const ns = main.namespaceURI;
-    this.paragraphNodes = list(main, ns, 'p');
-    const paragraphs = this.paragraphNodes.map((node, index) => ({index, text:list(node, ns, 't').map(text => text.textContent).join('')}));
+    const paragraphNodes = list(main, ns, 'p');
+    const paragraphs = paragraphNodes.map((node, index) => ({index, text:list(node, ns, 't').map(text => text.textContent).join('')}));
     const revisions = [];
     for (const type of ['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','sectPrChange']) {
       for (const node of list(main, ns, type)) revisions.push({type, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
@@ -133,11 +153,13 @@ export class DocxRaySDK {
     }
     warnings.push('The text view is a projection, not a Word layout renderer. Deleted text appears under Reviews and Raw XML.', 'Paragraph and review snippets are reserialized. Raw XML and downloads retain the original part contents.', 'No application file-size cap. Available browser memory and ZIP/encoding support set practical limits.');
     if (relationships.some(rel => rel.external)) warnings.push('External relationships are displayed only, never fetched.');
+    this.archive = archive; this.parts = parts; this.paragraphNodes = paragraphNodes;
     return {filename, mainPart, compressedBytes:bytes.length, expandedBytes:parts.reduce((sum, part) => sum + part.bytes,0), parts, relationships, paragraphs, revisions, comments, warnings,
       summary:{parts:parts.length, xmlParts:parts.filter(part => part.kind === 'xml').length, paragraphs:paragraphs.length, runs:list(main,ns,'r').length, tables:list(main,ns,'tbl').length, media:parts.filter(part => part.path.includes('/media/')).length},
       steps:[{title:'Open ZIP container',detail:`${bytes.length.toLocaleString()} bytes read in your browser.`},{title:'Validate package',detail:'Verified CRCs, package paths and content types.'},{title:'Locate document',detail:`Main document: ${mainPart}.`},{title:'Explore package parts',detail:`${parts.length} files; XML is decoded on demand.`},{title:'Map text and reviews',detail:`${paragraphs.length} paragraphs, ${comments.length} comments, ${revisions.length} revision records.`}]};
   }
   async part(path) {
+    this.requireDocument();
     const metadata = this.parts.find(part => part.path === path);
     if (!metadata) throw new Error('Package part not found.');
     const bytes = await this.archive.file(path).async('uint8array');
@@ -146,15 +168,18 @@ export class DocxRaySDK {
     catch (error) {return {...metadata, preview:hex(bytes), note:error.message};}
   }
   paragraph(index) {
+    this.requireDocument();
     const node = this.paragraphNodes[index];
     if (!node) throw new Error('Paragraph not found.');
     return new XMLSerializer().serializeToString(node);
   }
   async download(path) {
+    this.requireDocument();
     if (!this.parts.some(part => part.path === path)) throw new Error('Package part not found.');
     return this.archive.file(path).async('uint8array');
   }
   async exportXml() {
+    this.requireDocument();
     const output = new JSZip();
     for (const part of this.parts.filter(part => part.kind === 'xml')) output.file(part.path, await this.download(part.path));
     return output.generateAsync({type:'uint8array', compression:'DEFLATE'});

@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build-web.mjs",
-    "test": "npm run build && node --test tests/sdk.test.mjs tests/ui.test.cjs"
+    "test": "npm run build && node --test tests/*.test.mjs tests/*.test.cjs"
   },
   "devDependencies": {
     "@xmldom/xmldom": "0.9.12",

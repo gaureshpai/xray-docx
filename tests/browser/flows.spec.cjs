@@ -2,6 +2,7 @@ const {test, expect} = require('@playwright/test');
 const {readFileSync, promises:fs} = require('node:fs');
 const {randomBytes} = require('node:crypto');
 const JSZip = require('jszip');
+const {spawnSync} = require('node:child_process');
 
 const sample = readFileSync('public/sample.docx');
 const reviewed = readFileSync('tests/reviewed.docx');
@@ -77,6 +78,15 @@ test('invalid files fail visibly and a subsequent document succeeds', async ({pa
   await expect(page.locator('#status')).toContainText('Invalid');
   await expect(page.locator('#workspace')).toBeHidden();
   await expect(page.locator('#file')).toBeEnabled();
+  await upload(page);
+});
+
+test('duplicate ZIP entries reject visibly and a valid document can recover', async ({page}) => {
+  const result = spawnSync('python3', ['-c', 'import sys; from tests.test_engine import altered; sys.stdout.buffer.write(altered(extra=[("customXml/duplicate.xml", b"<old/>"),("customXml/duplicate.xml", b"<new/>")]))']);
+  expect(result.status).toBe(0);
+  await page.locator('#file').setInputFiles({name:'duplicate.docx',mimeType:'application/octet-stream',buffer:result.stdout});
+  await expect(page.locator('#status')).toContainText('Duplicate archive entry');
+  await expect(page.locator('#workspace')).toBeHidden();
   await upload(page);
 });
 

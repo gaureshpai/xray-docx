@@ -2,6 +2,8 @@
 
 ## Website
 
+`web/archive.mjs` validates the complete ZIP catalog before JSZip's file map can overwrite duplicate or normalized names. It rejects ambiguous entries, unsafe paths and entry-count mismatches, with no fixed size/count cap. The adapter uses internals from the exactly pinned JSZip version; archive regressions are required when upgrading that dependency. The public loader still verifies CRCs.
+
 `web/sdk.mjs` is a browser-compatible SDK using pinned JSZip and xmldom dependencies. `web/worker.mjs` runs it outside the page’s UI thread. `public/sdk-client.js` manages requests and cancellation. `public/app.js` renders results using text nodes.
 
 `npm run build` bundles the SDK and dependencies into `public/worker.js`. Vercel hosts only `public/`; there are no conversion API routes or functions. Selected documents and generated exports stay in browser memory. The sample button fetches the public sample DOCX, but inspection does not upload it.

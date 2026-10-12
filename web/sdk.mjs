@@ -1,6 +1,7 @@
 /** Browser-compatible OOXML SDK. No network calls and no application size caps. */
 import JSZip from 'jszip';
 import {DOMParser, XMLSerializer} from '@xmldom/xmldom';
+import {loadArchive} from './archive.mjs';
 
 const WORD = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']);
 const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -103,7 +104,7 @@ export class DocxRaySDK {
     if (!bytes.length) throw new Error('Choose a nonempty document.');
     progress('Opening the ZIP package and verifying entry CRCs…');
     let archive;
-    try {archive = await JSZip.loadAsync(bytes, {checkCRC32:true, createFolders:false});}
+    try {archive = await loadArchive(bytes);}
     catch (error) {throw new Error(`Invalid, corrupt, encrypted or unsupported ZIP: ${error.message}`);}
     const entries = Object.values(archive.files).filter(file => !file.dir);
     for (const file of entries) {

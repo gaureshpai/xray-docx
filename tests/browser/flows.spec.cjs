@@ -38,7 +38,7 @@ test('sample, raw XML, explorer filter and relationships', async ({page}) => {
 
 test('reviews, original single-part bytes and complete XML bundle stay local', async ({page}) => {
   const requests = [];
-  page.on('request', request => requests.push({method:request.method(), path:new URL(request.url()).pathname}));
+  page.on('request', request => requests.push({method:request.method(), url:request.url()}));
   await upload(page, reviewed);
   await page.locator('#reviews-tab').click();
   await expect(page.locator('#reviews')).toContainText('Check this wording.');
@@ -54,7 +54,11 @@ test('reviews, original single-part bytes and complete XML bundle stay local', a
   const paths = Object.keys(original.files).filter(path => /\.(xml|rels)$/i.test(path));
   expect(Object.values(exported.files).filter(file => !file.dir).map(file => file.name).sort()).toEqual(paths.sort());
   for (const path of paths) expect(await exported.file(path).async('nodebuffer')).toEqual(await original.file(path).async('nodebuffer'));
-  expect(requests.every(request => request.method === 'GET' && request.path === '/worker.js')).toBe(true);
+  const networkRequests = requests.filter(request => new URL(request.url).protocol !== 'blob:');
+  expect(networkRequests.filter(request => {
+    const url = new URL(request.url);
+    return request.method !== 'GET' || url.origin !== 'http://127.0.0.1:8123' || !['/worker.js','/favicon.ico'].includes(url.pathname);
+  })).toEqual([]);
 });
 
 test('keyboard tabs and text mapping still work after a download', async ({page}) => {

@@ -42,3 +42,11 @@ test('paragraph text does not duplicate text inside a nested text-box paragraph'
   const bytes = await fixture('<w:p><w:r><w:t>Outer</w:t><w:drawing><w:txbxContent><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p>');
   assert.deepEqual((await new DocxRaySDK().inspect(bytes)).paragraphs.map(p => p.text), ['Outer','Inner']);
 });
+
+test('comment cards show current text while removed text remains in revision records', async () => {
+  const bytes = await fixture('<w:p/>', {'word/comments.xml':`<w:comments xmlns:w="${WORD}"><w:comment w:id="7"><w:p><w:del w:id="8"><w:r><w:delText>old</w:delText></w:r></w:del><w:moveFrom w:id="9"><w:r><w:t>moved</w:t></w:r></w:moveFrom><w:ins w:id="10"><w:r><w:t>current</w:t></w:r></w:ins></w:p></w:comment></w:comments>`});
+  const result = await new DocxRaySDK().inspect(bytes);
+  assert.equal(result.comments[0].text, 'current');
+  assert.equal(result.revisions.find(r => r.id === '8').text, 'old');
+  assert.equal(result.revisions.find(r => r.id === '9').text, 'moved');
+});

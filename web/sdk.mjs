@@ -170,7 +170,7 @@ export class DocxRaySDK {
             const type = node.localName, nodeNs = node.namespaceURI;
             if (type === 'comment' || REVISION_TYPES.has(type)) {
               const record = {part:part.path, id:attr(node, nodeNs, 'id'), author:attr(node, nodeNs, 'author'), date:attr(node, nodeNs, 'date'),
-                text:textProjection(node, {removed:true}), xml:new XMLSerializer().serializeToString(node)};
+                text:textProjection(node, {removed:['del','moveFrom'].includes(type)}), xml:new XMLSerializer().serializeToString(node)};
               if (type === 'comment') comments.push(record); else revisions.push({...record, type});
             }
           }

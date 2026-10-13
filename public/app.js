@@ -18,6 +18,11 @@ function status(text, error = false) {
   $('status').textContent = text;
   $('status').classList.toggle('error', error);
 }
+function replaceContents(id, nodes) {
+  const fragment = document.createDocumentFragment();
+  for (const node of nodes) fragment.append(node);
+  $(id).replaceChildren(fragment);
+}
 function setBusy(value) {
   busy = value;
   for (const id of ['file', 'sample']) $(id).disabled = value;
@@ -50,6 +55,8 @@ async function inspect(file) {
     $('workspace').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start'});
   } catch (error) {
     if (version !== operationVersion) return;
+    documentResult = null; selectedPart = null; currentFile = null;
+    $('workspace').hidden = true;
     status(error.name === 'AbortError' ? 'Request timed out. Try a smaller document or use the CLI.' : error.message, true);
   } finally {if (version === operationVersion) setBusy(false);}
 }
@@ -69,6 +76,7 @@ async function selectPart(part, allowBusy=false) {
     $('xml').textContent = data.xml ?? data.preview;
     $('download').disabled = busy;
   } catch (error) {
+    if (allowBusy) throw error;
     if (version === selectionVersion) $('xml').textContent = error.message;
   }
 }
@@ -82,7 +90,7 @@ function renderParts() {
     button.addEventListener('click', () => selectPart(part));
     return button;
   });
-  $('parts').replaceChildren(...(nodes.length ? nodes : [element('p', 'No matching parts.', 'muted')]));
+  replaceContents('parts', nodes.length ? nodes : [element('p', 'No matching parts.', 'muted')]);
 }
 function showTab(name) {
   for (const tab of document.querySelectorAll('[data-tab]')) {
@@ -119,7 +127,7 @@ async function render(version) {
     node.append(element('b', `0${i + 1}`), element('strong', step.title), element('p', step.detail));
     return node;
   }));
-  $('paragraphs').replaceChildren(...documentResult.paragraphs.map(paragraph => {
+  replaceContents('paragraphs', documentResult.paragraphs.map(paragraph => {
     const button = element('button', paragraph.text || '(empty paragraph)');
     button.disabled = busy;
     button.addEventListener('click', async () => {
@@ -135,14 +143,14 @@ async function render(version) {
     return button;
   }));
   $('snippet').textContent = 'Select a paragraph.';
-  $('relations').replaceChildren(...documentResult.relationships.map(rel => {
+  replaceContents('relations', documentResult.relationships.map(rel => {
     const card = element('div', undefined, 'relationship');
     card.append(element('strong', `${rel.type} · ${rel.id}`), element('div', `${rel.source} → ${rel.target}`),
       element('span', rel.external ? 'External reference · not fetched' : rel.exists ? `Resolved: ${rel.resolved}` : `Missing: ${rel.resolved}`));
     return card;
   }));
-  $('warnings').replaceChildren(...documentResult.warnings.map(warning => element('li', warning)));
-  $('reviews').replaceChildren(...[...documentResult.comments.map(comment => ({...comment, type:'Comment'})), ...documentResult.revisions].map(review => {
+  replaceContents('warnings', documentResult.warnings.map(warning => element('li', warning)));
+  replaceContents('reviews', [...documentResult.comments.map(comment => ({...comment, type:'Comment'})), ...documentResult.revisions].map(review => {
     const card = element('div', undefined, 'relationship');
     card.append(element('strong', `${review.type} · ${review.author || 'Unknown author'} · ID ${review.id}`), element('p', review.text || '(formatting / structural change)'), element('pre', review.xml));
     card.append(element('small', `${review.part}${review.date ? ` · ${review.date}` : ''}`));

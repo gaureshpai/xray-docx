@@ -1,6 +1,8 @@
 import {DocxRaySDK} from './sdk.mjs';
 const sdk = new DocxRaySDK();
-self.onmessage = async ({data}) => {
+let queue = Promise.resolve();
+self.onmessage = ({data}) => {queue = queue.then(() => dispatch(data));};
+async function dispatch(data) {
   const {id, action} = data;
   try {
     let result;
@@ -13,4 +15,4 @@ self.onmessage = async ({data}) => {
     if (result instanceof Uint8Array) self.postMessage({id,result}, [result.buffer]);
     else self.postMessage({id,result});
   } catch (error) {self.postMessage({id,error:error.message || 'Could not process this document in browser memory.'});}
-};
+}

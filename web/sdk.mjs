@@ -1,6 +1,7 @@
 /** Browser-compatible OOXML SDK. No network calls and no application size caps. */
 import JSZip from 'jszip';
 import {DOMParser, XMLSerializer} from '@xmldom/xmldom';
+import {loadArchive} from './archive.mjs';
 
 const WORD = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']);
 const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -10,6 +11,30 @@ const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
 const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
 const attr = (node, ns, name) => node.getAttributeNS(ns, name) || '';
+function pushChildren(stack, node) {
+  for (let child = node.lastChild; child; child = child.previousSibling) {
+    if (child.nodeType === 1) stack.push(child);
+  }
+}
+const REVISION_TYPES = new Set(['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','tblGridChange','trPrChange','tcPrChange','sectPrChange','numberingChange','cellIns','cellDel','cellMerge','customXmlInsRangeStart','customXmlDelRangeStart','customXmlMoveFromRangeStart','customXmlMoveToRangeStart']);
+function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
+  const chunks = [], stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.nodeType !== 1) continue;
+    if (WORD.has(node.namespaceURI)) {
+      if (!removed && ['del','moveFrom'].includes(node.localName)) continue;
+      if (!nestedParagraphs && node !== root && node.localName === 'p') continue;
+      if (node.localName === 't' || (removed && node.localName === 'delText')) {chunks.push(node.textContent); continue;}
+      if (node.localName === 'tab') chunks.push('\t');
+      if (['br','cr'].includes(node.localName)) chunks.push('\n');
+      if (node.localName === 'noBreakHyphen') chunks.push('\u2011');
+      if (node.localName === 'softHyphen') chunks.push('\u00ad');
+    }
+    pushChildren(stack, node);
+  }
+  return chunks.join('');
+}
 const normalize = value => {
   const parts = [];
   for (const part of value.split('/')) {
@@ -47,8 +72,13 @@ function decode(bytes) {
   return new TextDecoder(encoding, {fatal:true}).decode(bytes.subarray(skip));
 }
 function parse(text) {
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(text)) throw new Error('XML contains a forbidden control character.');
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error('DTD/entity declarations are not parsed. Original XML can still be viewed and downloaded.');
-  return new DOMParser({onError:(level, message) => {if (level !== 'warning') throw new Error(message);}}).parseFromString(text, 'application/xml');
+  return new DOMParser({onError:(level, message) => {
+    // Bytes were decoded with a fatal decoder. A literal U+FFFD is legal XML text.
+    if (level === 'warning' && message === 'Unicode replacement character detected, source encoding issues?') return;
+    throw new Error(`Malformed XML: ${message}`);
+  }}).parseFromString(text, 'application/xml');
 }
 function hex(bytes) {
   const lines = [];
@@ -79,7 +109,7 @@ export class DocxRaySDK {
     if (!bytes.length) throw new Error('Choose a nonempty document.');
     progress('Opening the ZIP package and verifying entry CRCs…');
     let archive;
-    try {archive = await JSZip.loadAsync(bytes, {checkCRC32:true, createFolders:false});}
+    try {archive = await loadArchive(bytes);}
     catch (error) {throw new Error(`Invalid, corrupt, encrypted or unsupported ZIP: ${error.message}`);}
     const entries = Object.values(archive.files).filter(file => !file.dir);
     for (const file of entries) {
@@ -137,18 +167,26 @@ export class DocxRaySDK {
     if (main.localName !== 'document' || !WORD.has(main.namespaceURI)) throw new Error('Invalid WordprocessingML document root.');
     const ns = main.namespaceURI;
     const paragraphNodes = list(main, ns, 'p');
-    const paragraphs = paragraphNodes.map((node, index) => ({index, text:list(node, ns, 't').map(text => text.textContent).join('')}));
-    const revisions = [];
-    for (const type of ['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','sectPrChange']) {
-      for (const node of list(main, ns, type)) revisions.push({type, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
-        text:[...list(node, ns, 't'), ...list(node, ns, 'delText')].map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
-    }
-    const comments = [];
-    for (const part of parts.filter(part => /(^|\/)comments[^/]*\.xml$/i.test(part.path))) {
+    const paragraphs = paragraphNodes.map((node, index) => ({index, text:textProjection(node, {nestedParagraphs:false})}));
+    const revisions = [], comments = [];
+    const commentTargets = new Set(relationships.filter(rel => !rel.external && rel.type === 'comments').map(rel => rel.resolved));
+    const reviewParts = parts.filter(part => part.path === mainPart || part.contentType.includes('wordprocessingml') || commentTargets.has(part.path) || /(^|\/)comments[^/]*\.xml$/i.test(part.path));
+    for (const part of reviewParts.filter(part => part.kind === 'xml')) {
       try {
-        const document = parse(decode(await archive.file(part.path).async('uint8array')));
-        for (const node of list(document, ns, 'comment')) comments.push({part:part.path, id:attr(node, ns, 'id'), author:attr(node, ns, 'author'), date:attr(node, ns, 'date'),
-          text:list(node, ns, 't').map(text => text.textContent).join(''), xml:new XMLSerializer().serializeToString(node)});
+        const root = part.path === mainPart ? main : parse(decode(await archive.file(part.path).async('uint8array'))).documentElement;
+        const stack = [root];
+        while (stack.length) {
+          const node = stack.pop();
+          if (WORD.has(node.namespaceURI)) {
+            const type = node.localName, nodeNs = node.namespaceURI;
+            if (type === 'comment' || REVISION_TYPES.has(type)) {
+              const record = {part:part.path, id:attr(node, nodeNs, 'id'), author:attr(node, nodeNs, 'author'), date:attr(node, nodeNs, 'date'),
+                text:textProjection(node, {removed:['del','moveFrom'].includes(type)}), xml:new XMLSerializer().serializeToString(node)};
+              if (type === 'comment') comments.push(record); else revisions.push({...record, type});
+            }
+          }
+          pushChildren(stack, node);
+        }
       } catch (error) {warnings.push(`${part.path}: ${error.message}`);}
     }
     warnings.push('The text view is a projection, not a Word layout renderer. Deleted text appears under Reviews and Raw XML.', 'Paragraph and review snippets are reserialized. Raw XML and downloads retain the original part contents.', 'No application file-size cap. Available browser memory and ZIP/encoding support set practical limits.');

@@ -11,8 +11,8 @@ const port = 20000 + Math.floor(Math.random() * 20000);
 const origin = `http://127.0.0.1:${port}`;
 let server;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function until(predicate) {
-  for (let n = 0; n < 300; n++) {
+async function until(predicate, timeout=6000) {
+  for (let n = 0; n < Math.ceil(timeout / 20); n++) {
     if (predicate()) return;
     await pause(20);
   }
@@ -185,5 +185,54 @@ test('the UI accepts a valid document above the former 3 MB cap', async () => {
     assert.equal(ui.$('filename').textContent,'large.docx');
     assert.match(ui.$('parts').textContent,/large.bin/);
     assert.equal(ui.requests.length,0);
+  } finally {ui.close();}
+});
+
+test('cancelled sample fetch cannot reopen a document after it resolves', async () => {
+  const ui = app();
+  try {
+    let finish;
+    ui.window.fetch = () => new Promise(resolve => {finish = resolve;});
+    ui.$('sample').click();
+    ui.$('cancel').click();
+    finish({ok:true, blob:async () => new Blob([fs.readFileSync('public/sample.docx')])});
+    await pause(500);
+    assert.equal(ui.$('workspace').hidden, true);
+    assert.equal(ui.$('status').textContent, 'Processing cancelled.');
+    assert.equal(ui.$('export').disabled, true);
+    ui.upload(fs.readFileSync('tests/reviewed.docx'), 'after-cancel.docx');
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    assert.equal(ui.$('filename').textContent, 'after-cancel.docx');
+  } finally {ui.close();}
+});
+
+test('cancelled worker operation stays cancelled and can recover with a new file', async () => {
+  const ui = app();
+  try {
+    ui.upload(fs.readFileSync('public/sample.docx'));
+    ui.$('cancel').click();
+    await pause(50);
+    assert.equal(ui.$('status').textContent, 'Processing cancelled.');
+    assert.equal(ui.$('workspace').hidden, true);
+    assert.equal(ui.$('download').disabled, true);
+    ui.upload(fs.readFileSync('tests/reviewed.docx'));
+    await until(() => ui.$('status').textContent.startsWith('Inspected'));
+    assert.match(ui.$('reviews').textContent, /Check this wording/);
+  } finally {ui.close();}
+});
+
+test('many-paragraph inspection renders every mapping without an argument-count crash', async () => {
+  const JSZip = require('jszip');
+  const zip = await JSZip.loadAsync(fs.readFileSync('public/sample.docx'));
+  const count = 140000;
+  zip.file('word/document.xml', `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${'<w:p/>'.repeat(count)}<w:p><w:r><w:t>Final paragraph</w:t></w:r></w:p></w:body></w:document>`);
+  const ui = app();
+  try {
+    ui.upload(await zip.generateAsync({type:'uint8array'}));
+    await until(() => ui.$('status').textContent.startsWith('Inspected') || ui.$('status').classList.contains('error'), 60000);
+    assert.match(ui.$('status').textContent, /^Inspected/);
+    assert.equal(ui.$('paragraphs').children.length, count + 1);
+    ui.$('paragraphs').lastChild.click();
+    await until(() => ui.$('snippet').textContent.includes('Final paragraph'));
   } finally {ui.close();}
 });

@@ -39,3 +39,51 @@ class ReviewMarkupTests(unittest.TestCase):
             self.assertEqual(xml_paths, set(exported.namelist()))
             for path in xml_paths:
                 self.assertEqual(source.read(path), exported.read(path), path)
+
+
+class PackageParityTests(unittest.TestCase):
+    def changed(self, path, update):
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(FIXTURE)) as source, zipfile.ZipFile(output, "w") as target:
+            for name in source.namelist():
+                raw = source.read(name)
+                target.writestr(name, update(raw.decode()).encode() if name == path else raw)
+        return output.getvalue()
+
+    def test_forged_main_relationship_rejected(self):
+        from docx_ray.models import DocxError
+
+        data = self.changed(
+            "_rels/.rels",
+            lambda xml: xml.replace(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+                "urn:forged/officeDocument",
+            ),
+        )
+        with self.assertRaises(DocxError):
+            inspect_docx(data)
+
+    def test_foreign_content_override_rejected(self):
+        from docx_ray.models import DocxError
+
+        data = self.changed(
+            "[Content_Types].xml",
+            lambda xml: xml.replace(
+                '<Override PartName="/word/document.xml"', '<Override xmlns="urn:forged" PartName="/word/document.xml"'
+            ),
+        )
+        with self.assertRaises(DocxError):
+            inspect_docx(data)
+
+    def test_multiple_main_relationships_rejected(self):
+        from docx_ray.models import DocxError
+
+        data = self.changed(
+            "_rels/.rels",
+            lambda xml: xml.replace(
+                "</Relationships>",
+                '<Relationship Id="extra" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+            ),
+        )
+        with self.assertRaisesRegex(DocxError, "Multiple main"):
+            inspect_docx(data)

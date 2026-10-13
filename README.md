@@ -38,6 +38,12 @@ python -m docx_ray report.docx --output xml-parts.zip
 
 Run `npm test` and `python -m unittest discover -v`.
 
+For real-browser checks, run `npx playwright install chromium firefox webkit`, then `npm run test:e2e`. CI runs Chromium, Firefox, WebKit, and a mobile Chromium viewport against built assets with the hosting security headers.
+
 Vercel builds with `npm run build` and serves `public/`. No conversion functions, database, secrets, or migrations.
 
 See the [architecture guide](docs/architecture.md), [technical details](docs/technical.md), and [contribution rules](CONTRIBUTING.md).
+
+For the current audit branch and a short manual checklist, see [audit testing](docs/audit-testing.md).
+
+CLI `--json` includes source-labelled `comments` and `revisions`, alongside raw parts and paragraph mappings. Both engines project current text without deleted/moved-from content; original XML retains all review markup and comment anchors.

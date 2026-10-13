@@ -50,6 +50,10 @@ REVISION_TYPES = {
 }
 
 
+def media_type(value):
+    return (value or "").split(";", 1)[0].strip().lower()
+
+
 def word_name(node):
     namespace, _, name = node.tag.removeprefix("{").partition("}")
     return name if namespace in WORD_NAMESPACES else None
@@ -184,11 +188,11 @@ def _inspect(data, filename, limits):
             content_type = overrides.get(
                 name, defaults.get(name.rsplit(".", 1)[-1].lower(), "application/octet-stream")
             )
-            media_type = content_type.split(";", 1)[0].strip().lower()
+            normalized_type = media_type(content_type)
             is_xml = (
                 name.lower().endswith((".xml", ".rels"))
-                or media_type in {"application/xml", "text/xml"}
-                or media_type.endswith("+xml")
+                or normalized_type in {"application/xml", "text/xml"}
+                or normalized_type.endswith("+xml")
             )
             part = {
                 "path": name,
@@ -265,7 +269,7 @@ def _inspect(data, filename, limits):
                     main_path = resolved
         if not main_path or main_path not in roots:
             raise DocxError("Package does not contain its main office document XML.")
-        if overrides.get(main_path) not in DOC_TYPES:
+        if media_type(overrides.get(main_path)) not in DOC_TYPES:
             raise DocxError("This package is not a macro-free DOCX document.")
         main = roots[main_path]
         ns = main.tag.split("}")[0].lstrip("{")
@@ -293,7 +297,7 @@ def _inspect(data, filename, limits):
             path = part["path"]
             if path not in roots or not (
                 path == main_path
-                or "wordprocessingml" in part["contentType"]
+                or "wordprocessingml" in media_type(part["contentType"])
                 or path in comment_targets
                 or PurePosixPath(path).name.lower().startswith("comments")
             ):

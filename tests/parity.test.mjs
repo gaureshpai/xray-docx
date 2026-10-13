@@ -23,7 +23,8 @@ for (const ns of ['http://schemas.openxmlformats.org/wordprocessingml/2006/main'
     }
     zip.file('word/annotations.part', commentBytes);
     zip.file('word/header1.xml', `<w:hdr xmlns:w="${ns}"><w:p>${revisionTypes.map((type,i) => `<w:${type} w:id="${100+i}" w:author="Header">${['ins','del','moveFrom','moveTo'].includes(type) ? run(type) : ''}</w:${type}>`).join('')}</w:p></w:hdr>`);
-    zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml').async('string')).replace('/word/comments.xml','/word/annotations.part').replace('</Types>','<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>'));
+    zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml').async('string')).replace('/word/comments.xml','/word/annotations.part').replace('</Types>','<Override PartName="/word/header1.xml" ContentType="Application/Vnd.Openxmlformats-Officedocument.Wordprocessingml.Header+Xml"/></Types>'));
+    if (ns.includes('purl.oclc')) zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml').async('string')).replace('application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml','Application/Vnd.Openxmlformats-Officedocument.Wordprocessingml.Document.Main+Xml'));
     const bytes = await zip.generateAsync({type:'nodebuffer'});
     const sdk = new DocxRaySDK();
     const web = await sdk.inspect(bytes);

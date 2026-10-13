@@ -8,8 +8,9 @@ const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = new Set(['http://schemas.openxmlformats.org/package/2006/relationships','http://purl.oclc.org/ooxml/package/relationships']);
 const OFFICE_DOCUMENT = new Set(['http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument','http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument']);
 const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const mediaType = value => (value || '').split(';', 1)[0].trim().toLowerCase();
 const xmlMediaType = value => {
-  const type = value.split(';', 1)[0].trim().toLowerCase();
+  const type = mediaType(value);
   return type === 'application/xml' || type === 'text/xml' || type.endsWith('+xml');
 };
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
@@ -166,7 +167,7 @@ export class DocxRaySDK {
         }
       }
     }
-    if (!mainPart || !archive.file(mainPart) || overrides.get(mainPart) !== MAIN_TYPE) throw new Error('This package does not contain a macro-free DOCX main document.');
+    if (!mainPart || !archive.file(mainPart) || mediaType(overrides.get(mainPart)) !== MAIN_TYPE) throw new Error('This package does not contain a macro-free DOCX main document.');
     // Size metadata uses the pinned JSZip entry representation.
     // Regression tests compare these values with actual uncompressed bytes.
     const parts = entries.map(file => {
@@ -182,7 +183,7 @@ export class DocxRaySDK {
     const paragraphs = paragraphNodes.map((node, index) => ({index, text:textProjection(node, {nestedParagraphs:false})}));
     const revisions = [], comments = [];
     const commentTargets = new Set(relationships.filter(rel => !rel.external && rel.type === 'comments').map(rel => rel.resolved));
-    const reviewParts = parts.filter(part => part.path === mainPart || part.contentType.includes('wordprocessingml') || commentTargets.has(part.path) || /(^|\/)comments[^/]*\.xml$/i.test(part.path));
+    const reviewParts = parts.filter(part => part.path === mainPart || mediaType(part.contentType).includes('wordprocessingml') || commentTargets.has(part.path) || /(^|\/)comments[^/]*\.xml$/i.test(part.path));
     for (const part of reviewParts.filter(part => part.kind === 'xml')) {
       try {
         const root = part.path === mainPart ? main : parse(decode(await archive.file(part.path).async('uint8array'))).documentElement;

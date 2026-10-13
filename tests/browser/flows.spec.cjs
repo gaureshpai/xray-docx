@@ -178,6 +178,8 @@ test('removed text boxes stay raw and multi-paragraph reviews link to their orig
   zip.file('word/document.xml', `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>Visible</w:t></w:r><w:del w:id="20"><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Removed box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:del></w:p></w:body></w:document>`);
   const comments = `<w:comments xmlns:w="${ns}"><w:comment w:id="30"><w:p><w:r><w:t>First</w:t><w:br/><w:t>line</w:t></w:r></w:p><w:p/><w:p><w:r><w:t>Last</w:t></w:r></w:p></w:comment></w:comments>`;
   zip.file('word/comments.xml', comments);
+  zip.file('word/header1.xml', `<w:hdr xmlns:w="${ns}"><w:p><w:ins w:id="31"> <w:r><w:t>Header revised</w:t></w:r></w:ins></w:p></w:hdr>`);
+  zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml').async('string')).replace('application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml', 'Application/Vnd.Openxmlformats-Officedocument.Wordprocessingml.Document.Main+Xml').replace('</Types>', '<Override PartName="/word/header1.xml" ContentType="Application/Vnd.Openxmlformats-Officedocument.Wordprocessingml.Header+Xml"/></Types>'));
   await upload(page, await zip.generateAsync({type:'nodebuffer'}));
   await page.locator('#visual-tab').click();
   await expect(page.locator('#paragraphs')).not.toContainText('Removed box');
@@ -188,6 +190,7 @@ test('removed text boxes stay raw and multi-paragraph reviews link to their orig
   expect(await card.locator('p').innerText()).toBe('First\nline\n\nLast');
   await expect(card.locator('p')).toHaveCSS('white-space', 'pre-wrap');
   await expect(page.locator('#reviews')).toContainText('Removed box');
+  await expect(page.locator('#reviews')).toContainText('Header revised');
   await card.getByRole('button', {name:'Open source part'}).click();
   await expect(page.locator('#raw-tab')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#partname')).toHaveText('word/comments.xml');

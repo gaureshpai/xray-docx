@@ -32,6 +32,8 @@ JSZip verifies entry CRCs. Encrypted, unsupported ZIP variants and macro-enabled
 
 ## CLI
 
+The CLI validates original ZIP entry names before Python can truncate them at a null byte. It reads binary parts in chunks of at most 1 MiB to check declared sizes, local headers and CRCs without retaining binary contents in the inspection result. Corrupted binary parts reject the package before JSON output or XML export.
+
 Python 3.12+, no production dependencies. `docx_ray/service.py` performs bounded ZIP/XML inspection. `models.py` defines CLI safety defaults. `cli.py` prints parts, structured comment/revision JSON or exports original XML bytes. Review extraction covers the same common revision types as the browser, with source paths and current-text projection. Content types identify XML parts even with nonstandard extensions; decoded UTF-16/32 XML is parsed without changing original export bytes. The CLI retains a 20 MB input limit, 50 MB expansion limit, 20 MB combined XML limit, 512 entries, and a nesting guard; these do not apply to the client-only website.
 
 ## Tests

@@ -46,3 +46,11 @@ test('valid Unicode part paths and directory entries preserve original downloads
   assert.ok(result.parts.some(part => part.path === 'word/media/日本.bin'));
   assert.deepEqual(await sdk.download('word/media/日本.bin'), new Uint8Array([1,2,3]));
 });
+
+for (const option of ['corrupt','null_name']) {
+  test(`browser SDK rejects binary integrity fixture: ${option}`, async () => {
+    const fixture = spawnSync('python3', ['-c', `import sys; from tests.test_integrity import binary_fixture; sys.stdout.buffer.write(binary_fixture(${option}=True))`]);
+    assert.equal(fixture.status,0,fixture.stderr.toString());
+    await assert.rejects(new DocxRaySDK().inspect(fixture.stdout), option === 'corrupt' ? /CRC|corrupt/i : /Unsafe archive path/);
+  });
+}

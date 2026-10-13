@@ -151,6 +151,8 @@ def _inspect(data, filename, limits):
         seen = set()
         expanded = 0
         for entry in entries:
+            # ZipInfo.filename truncates at NUL; validate the original catalog name.
+            safe_path(entry.orig_filename)
             safe_path(entry.filename)
             if entry.filename in seen:
                 raise DocxError("Duplicate archive entry.")
@@ -219,6 +221,20 @@ def _inspect(data, filename, limits):
                     if not raw.startswith((b"\xff\xfe", b"\xfe\xff", b"\x00\x00\xfe\xff"))
                     else "unicode-bom",
                 )
+            else:
+                # Consume binary parts too, so CRC/local-header errors cannot hide
+                # behind XML-only inspection. Keep working memory bounded.
+                remaining = entry.file_size
+                with archive.open(entry) as source:
+                    while True:
+                        chunk = source.read(min(1_048_576, remaining + 1))
+                        if not chunk:
+                            break
+                        remaining -= len(chunk)
+                        if remaining < 0:
+                            raise DocxError("Archive entry size mismatch.")
+                if remaining:
+                    raise DocxError("Archive entry size mismatch.")
             parts.append(part)
         content_root = roots["[Content_Types].xml"]
         if content_root.tag != f"{{{CONTENT_NS}}}Types":

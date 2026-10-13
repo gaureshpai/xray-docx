@@ -25,3 +25,12 @@ test('a wide story still discovers its final revision instead of emitting a stac
   assert.equal(result.revisions.find(revision => revision.id === 'last')?.text, 'Final revision');
   assert.ok(!result.warnings.some(warning => /call stack/i.test(warning)));
 });
+
+test('a wide table row keeps every cell while checking deletion properties', {timeout:20000}, async () => {
+  const count = 20000;
+  const cells = Array.from({length:count}, (_,index)=>`<w:tc><w:p><w:r><w:t>Cell ${index}</w:t></w:r></w:p></w:tc>`).join('');
+  const result = await new DocxRaySDK().inspect(await fixture(`<w:tbl><w:tr>${cells}</w:tr></w:tbl>`));
+  assert.equal(result.paragraphs.length,count);
+  assert.equal(result.paragraphs[0].text,'Cell 0');
+  assert.equal(result.paragraphs.at(-1).text,`Cell ${count-1}`);
+});

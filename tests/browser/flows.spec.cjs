@@ -197,3 +197,30 @@ test('removed text boxes stay raw and multi-paragraph reviews link to their orig
   await expect(page.locator('#xml')).toHaveText(comments);
   expect((await download(page, '#download')).bytes).toEqual(Buffer.from(comments));
 });
+
+test('deleted table rows and cells stay in reviews while mapping and exports retain raw content', async ({page}) => {
+  const {deletedTableFixture} = require('../structural-fixture.cjs');
+  const bytes = await deletedTableFixture();
+  await upload(page,bytes,'deleted-tables.docx');
+  await page.locator('#visual-tab').click();
+  await expect(page.locator('#paragraphs button')).toHaveCount(7);
+  await expect(page.locator('#paragraphs')).toContainText('Visible row');
+  await expect(page.locator('#paragraphs')).not.toContainText('Deleted row');
+  await expect(page.locator('#paragraphs')).not.toContainText('Deleted cell');
+  await expect(page.locator('#paragraphs')).toContainText('Historical properties retained');
+  await page.locator('#paragraphs button').nth(1).click();
+  await expect(page.locator('#snippet')).toContainText('Deleted row');
+  await page.locator('#reviews-tab').click();
+  const row = page.locator('#reviews .relationship').filter({has:page.locator('strong',{hasText:'ID 101'})});
+  await expect(row.locator('p')).toHaveText('Deleted row\nSecond removed cell');
+  await expect(page.locator('#reviews .relationship').filter({has:page.locator('strong',{hasText:'ID 108'})}).locator('p')).toHaveText('Visible comment');
+  await expect(page.locator('#reviews')).toContainText('Deleted cell');
+  await expect(page.locator('#reviews')).toContainText('Removed comment row');
+  await expect(page.locator('#reviews')).toContainText('Removed header row');
+  await row.getByRole('button',{name:'Open source part'}).click();
+  const original = await JSZip.loadAsync(bytes);
+  expect((await download(page,'#download')).bytes).toEqual(await original.file('word/document.xml').async('nodebuffer'));
+  const bundle = await JSZip.loadAsync((await download(page,'#export')).bytes);
+  expect(await bundle.file('word/comments.xml').async('nodebuffer')).toEqual(await original.file('word/comments.xml').async('nodebuffer'));
+  expect(await bundle.file('word/header1.xml').async('nodebuffer')).toEqual(await original.file('word/header1.xml').async('nodebuffer'));
+});

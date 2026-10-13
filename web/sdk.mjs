@@ -22,11 +22,33 @@ function pushChildren(stack, node) {
   }
 }
 const REVISION_TYPES = new Set(['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','tblGridChange','trPrChange','tcPrChange','sectPrChange','numberingChange','cellIns','cellDel','cellMerge','customXmlInsRangeStart','customXmlDelRangeStart','customXmlMoveFromRangeStart','customXmlMoveToRangeStart']);
+const removedContainers = new WeakMap();
+function wordChild(node, name) {
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    if (child.namespaceURI === node.namespaceURI && child.localName === name) return child;
+  }
+}
+function removedContainer(node) {
+  if (!WORD.has(node.namespaceURI) || !['tr','tc'].includes(node.localName)) return false;
+  if (removedContainers.has(node)) return removedContainers.get(node);
+  const row = node.localName === 'tr';
+  const properties = wordChild(node, row ? 'trPr' : 'tcPr');
+  const removed = Boolean(properties && wordChild(properties, row ? 'del' : 'cellDel'));
+  removedContainers.set(node, removed);
+  return removed;
+}
+function reviewTextRoot(node) {
+  const properties = node.parentNode, container = properties?.parentNode;
+  if (properties?.namespaceURI !== node.namespaceURI || container?.namespaceURI !== node.namespaceURI) return node;
+  if (node.localName === 'del' && properties.localName === 'trPr' && container.localName === 'tr') return container;
+  if (node.localName === 'cellDel' && properties.localName === 'tcPr' && container.localName === 'tc') return container;
+  return node;
+}
 function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
   // A paragraph discovered independently can still belong to a removed drawing.
   if (!removed && !nestedParagraphs) {
     for (let parent = root.parentNode; parent; parent = parent.parentNode) {
-      if (WORD.has(parent.namespaceURI) && ['del','moveFrom'].includes(parent.localName)) return '';
+      if ((WORD.has(parent.namespaceURI) && ['del','moveFrom'].includes(parent.localName)) || removedContainer(parent)) return '';
     }
   }
   const chunks = [], stack = [root];
@@ -35,7 +57,7 @@ function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
     const node = stack.pop();
     if (node.nodeType !== 1) continue;
     if (WORD.has(node.namespaceURI)) {
-      if (!removed && ['del','moveFrom'].includes(node.localName)) continue;
+      if (!removed && (['del','moveFrom'].includes(node.localName) || removedContainer(node))) continue;
       if (!nestedParagraphs && node !== root && node.localName === 'p') continue;
       if (nestedParagraphs && node.localName === 'p' && paragraphCount++) chunks.push('\n');
       if (node.localName === 't' || (removed && node.localName === 'delText')) {chunks.push(node.textContent); continue;}
@@ -194,7 +216,7 @@ export class DocxRaySDK {
             const type = node.localName, nodeNs = node.namespaceURI;
             if (type === 'comment' || REVISION_TYPES.has(type)) {
               const record = {part:part.path, id:attr(node, nodeNs, 'id'), author:attr(node, nodeNs, 'author'), date:attr(node, nodeNs, 'date'),
-                text:textProjection(node, {removed:['del','moveFrom'].includes(type)}), xml:new XMLSerializer().serializeToString(node)};
+                text:textProjection(reviewTextRoot(node), {removed:['del','moveFrom','cellDel'].includes(type)}), xml:new XMLSerializer().serializeToString(node)};
               if (type === 'comment') comments.push(record); else revisions.push({...record, type});
             }
           }

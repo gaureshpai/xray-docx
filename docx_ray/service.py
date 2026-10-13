@@ -61,13 +61,40 @@ def word_name(node):
     return name if namespace in WORD_NAMESPACES else None
 
 
-def text_projection(root, *, removed=False, nested_paragraphs=True):
+def removed_container(node, cache):
+    name = word_name(node)
+    if name not in {"tr", "tc"}:
+        return False
+    if node not in cache:
+        prefix = node.tag.split("}")[0] + "}"
+        properties = node.find(prefix + ("trPr" if name == "tr" else "tcPr"))
+        cache[node] = (
+            properties is not None and properties.find(prefix + ("del" if name == "tr" else "cellDel")) is not None
+        )
+    return cache[node]
+
+
+def review_text_root(node, parents):
+    properties = parents.get(node)
+    container = parents.get(properties)
+    if properties is None or container is None:
+        return node
+    prefix = node.tag.split("}")[0] + "}"
+    if node.tag == prefix + "del" and properties.tag == prefix + "trPr" and container.tag == prefix + "tr":
+        return container
+    if node.tag == prefix + "cellDel" and properties.tag == prefix + "tcPr" and container.tag == prefix + "tc":
+        return container
+    return node
+
+
+def text_projection(root, *, removed=False, nested_paragraphs=True, removal_cache=None):
+    cache = {} if removal_cache is None else removal_cache
     chunks, stack = [], [root]
     paragraphs = 0
     while stack:
         node = stack.pop()
         name = word_name(node)
-        if not removed and name in {"del", "moveFrom"}:
+        if not removed and (name in {"del", "moveFrom"} or removed_container(node, cache)):
             continue
         if not nested_paragraphs and node is not root and name == "p":
             continue
@@ -335,16 +362,17 @@ def _inspect(data, filename, limits):
             return f"{{{ns}}}{tag}"
 
         paragraphs = []
+        removal_cache = {}
         parents = {child: parent for parent in main.iter() for child in parent}
         for index, paragraph in enumerate(main.iter(q("p"))):
             ancestor = parents.get(paragraph)
             removed = False
             while ancestor is not None:
-                if word_name(ancestor) in {"del", "moveFrom"}:
+                if word_name(ancestor) in {"del", "moveFrom"} or removed_container(ancestor, removal_cache):
                     removed = True
                     break
                 ancestor = parents.get(ancestor)
-            text = "" if removed else text_projection(paragraph, nested_paragraphs=False)
+            text = "" if removed else text_projection(paragraph, nested_paragraphs=False, removal_cache=removal_cache)
             paragraphs.append({"index": index, "text": text, "xml": ET.tostring(paragraph, encoding="unicode")})
         comments, revisions = [], []
         comment_targets = {r["resolved"] for r in relationships if not r["external"] and r["type"] == "comments"}
@@ -357,6 +385,9 @@ def _inspect(data, filename, limits):
                 or PurePosixPath(path).name.lower().startswith("comments")
             ):
                 continue
+            review_parents = (
+                parents if path == main_path else {child: parent for parent in roots[path].iter() for child in parent}
+            )
             for node in roots[path].iter():
                 kind = word_name(node)
                 if kind != "comment" and kind not in REVISION_TYPES:
@@ -365,7 +396,11 @@ def _inspect(data, filename, limits):
                 record = {
                     "part": path,
                     **{key: node.get(namespace + key, "") for key in ("id", "author", "date")},
-                    "text": text_projection(node, removed=kind in {"del", "moveFrom"}),
+                    "text": text_projection(
+                        review_text_root(node, review_parents),
+                        removed=kind in {"del", "moveFrom", "cellDel"},
+                        removal_cache=removal_cache,
+                    ),
                     "xml": ET.tostring(node, encoding="unicode"),
                 }
                 if kind == "comment":

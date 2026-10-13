@@ -2,6 +2,7 @@ const {test, expect} = require('@playwright/test');
 const {readFileSync, promises:fs} = require('node:fs');
 const {randomBytes} = require('node:crypto');
 const JSZip = require('jszip');
+const {spawnSync} = require('node:child_process');
 
 const sample = readFileSync('public/sample.docx');
 const reviewed = readFileSync('tests/reviewed.docx');
@@ -80,6 +81,15 @@ test('invalid files fail visibly and a subsequent document succeeds', async ({pa
   await upload(page);
 });
 
+test('duplicate ZIP entries reject visibly and a valid document can recover', async ({page}) => {
+  const result = spawnSync('python3', ['-c', 'import sys; from tests.test_engine import altered; sys.stdout.buffer.write(altered(extra=[("customXml/duplicate.xml", b"<old/>"),("customXml/duplicate.xml", b"<new/>")]))']);
+  expect(result.status).toBe(0);
+  await page.locator('#file').setInputFiles({name:'duplicate.docx',mimeType:'application/octet-stream',buffer:result.stdout});
+  await expect(page.locator('#status')).toContainText('Duplicate archive entry');
+  await expect(page.locator('#workspace')).toBeHidden();
+  await upload(page);
+});
+
 test('malformed main XML reports an error without showing a repaired document', async ({page}) => {
   const zip = await JSZip.loadAsync(sample);
   zip.file('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p w:rsidR=123/></w:body></w:document>');
@@ -130,6 +140,24 @@ test('large binary parts retain bytes without the old 3 MB cap', async ({page}) 
   await page.locator('#parts button').click();
   await expect(page.locator('#partinfo')).toContainText('first 512 bytes');
   expect((await download(page, '#download')).bytes).toEqual(media);
+});
+
+test('many paragraphs render completely, map the final paragraph and export original XML', async ({page}) => {
+  const zip = await JSZip.loadAsync(sample);
+  const count = 5000;
+  const body = Array.from({length:count}, (_, index) => `<w:p><w:r><w:t>Paragraph ${index}</w:t></w:r></w:p>`).join('');
+  const xml = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
+  zip.file('word/document.xml', xml);
+  await upload(page, await zip.generateAsync({type:'nodebuffer'}), 'many-paragraphs.docx');
+  await expect(page.locator('#paragraphs button')).toHaveCount(count);
+  await page.locator('#visual-tab').click();
+  await page.locator('#paragraphs button').last().click();
+  await expect(page.locator('#snippet')).toContainText(`Paragraph ${count-1}`);
+  const bundle = await download(page, '#export');
+  const exported = await JSZip.loadAsync(bundle.bytes);
+  expect(await exported.file('word/document.xml').async('string')).toBe(xml);
+  await upload(page);
+  await expect(page.locator('#paragraphs button')).toHaveCount(9);
 });
 
 test('document markup stays text and the page fits the viewport', async ({page}, testInfo) => {

@@ -1,6 +1,7 @@
 /** Browser-compatible OOXML SDK. No network calls and no application size caps. */
 import JSZip from 'jszip';
 import {DOMParser, XMLSerializer} from '@xmldom/xmldom';
+import {loadArchive} from './archive.mjs';
 
 const WORD = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']);
 const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -10,6 +11,11 @@ const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
 const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
 const attr = (node, ns, name) => node.getAttributeNS(ns, name) || '';
+function pushChildren(stack, node) {
+  for (let child = node.lastChild; child; child = child.previousSibling) {
+    if (child.nodeType === 1) stack.push(child);
+  }
+}
 const REVISION_TYPES = new Set(['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','tblGridChange','trPrChange','tcPrChange','sectPrChange','numberingChange','cellIns','cellDel','cellMerge','customXmlInsRangeStart','customXmlDelRangeStart','customXmlMoveFromRangeStart','customXmlMoveToRangeStart']);
 function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
   const chunks = [], stack = [root];
@@ -25,7 +31,7 @@ function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
       if (node.localName === 'noBreakHyphen') chunks.push('\u2011');
       if (node.localName === 'softHyphen') chunks.push('\u00ad');
     }
-    stack.push(...localChildren(node).reverse());
+    pushChildren(stack, node);
   }
   return chunks.join('');
 }
@@ -103,7 +109,7 @@ export class DocxRaySDK {
     if (!bytes.length) throw new Error('Choose a nonempty document.');
     progress('Opening the ZIP package and verifying entry CRCs…');
     let archive;
-    try {archive = await JSZip.loadAsync(bytes, {checkCRC32:true, createFolders:false});}
+    try {archive = await loadArchive(bytes);}
     catch (error) {throw new Error(`Invalid, corrupt, encrypted or unsupported ZIP: ${error.message}`);}
     const entries = Object.values(archive.files).filter(file => !file.dir);
     for (const file of entries) {
@@ -179,7 +185,7 @@ export class DocxRaySDK {
               if (type === 'comment') comments.push(record); else revisions.push({...record, type});
             }
           }
-          stack.push(...localChildren(node).reverse());
+          pushChildren(stack, node);
         }
       } catch (error) {warnings.push(`${part.path}: ${error.message}`);}
     }

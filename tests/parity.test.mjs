@@ -48,3 +48,37 @@ for (const ns of ['http://schemas.openxmlformats.org/wordprocessingml/2006/main'
     }
   });
 }
+
+test('binary OOXML media types remain binary in both engines and stay out of XML exports', async () => {
+  const zip = await JSZip.loadAsync(readFileSync('tests/reviewed.docx'));
+  const paths = ['word/embeddings/object.bin','word/fonts/font.odttf'];
+  const types = ['application/vnd.openxmlformats-officedocument.oleObject','application/vnd.openxmlformats-officedocument.obfuscatedFont'];
+  const binary = Buffer.from([255,254,0,0,255,0,127]);
+  paths.forEach(path=>zip.file(path,binary));
+  const xmlPaths = ['customXml/plain.part','customXml/text.part'];
+  const xmlTypes = ['application/xml','text/xml; charset=UTF-8'];
+  xmlPaths.forEach(path=>zip.file(path,'<root>Original XML</root>'));
+  zip.file('[Content_Types].xml',(await zip.file('[Content_Types].xml').async('string')).replace('</Types>',paths.map((path,i)=>`<Override PartName="/${path}" ContentType="${types[i]}"/>`).join('')+xmlPaths.map((path,i)=>`<Override PartName="/${path}" ContentType="${xmlTypes[i]}"/>`).join('')+'</Types>'));
+  const bytes = await zip.generateAsync({type:'nodebuffer'});
+  const sdk = new DocxRaySDK();
+  const web = await sdk.inspect(bytes);
+  const cli = spawnSync('python3',['-c','import sys,json,base64; from docx_ray.service import inspect_docx,xml_bundle; data=sys.stdin.buffer.read(); print(json.dumps({"result":inspect_docx(data),"bundle":base64.b64encode(xml_bundle(data)).decode()}))'],{input:bytes});
+  assert.equal(cli.status,0,cli.stderr.toString());
+  const output = JSON.parse(cli.stdout);
+  const webExport = await JSZip.loadAsync(await sdk.exportXml());
+  const cliExport = await JSZip.loadAsync(Buffer.from(output.bundle,'base64'));
+  for (const path of paths) {
+    assert.equal(web.parts.find(p=>p.path===path).kind,'binary');
+    assert.equal(output.result.parts.find(p=>p.path===path).kind,'binary');
+    assert.match((await sdk.part(path)).note,/Hex preview/);
+    assert.deepEqual(Buffer.from(await sdk.download(path)),binary);
+    assert.equal(webExport.file(path),null);
+    assert.equal(cliExport.file(path),null);
+  }
+  for (const path of xmlPaths) {
+    assert.equal(web.parts.find(p=>p.path===path).kind,'xml');
+    assert.equal(output.result.parts.find(p=>p.path===path).kind,'xml');
+    assert.equal(await webExport.file(path).async('string'),'<root>Original XML</root>');
+    assert.equal(await cliExport.file(path).async('string'),'<root>Original XML</root>');
+  }
+});

@@ -135,6 +135,7 @@ test('large binary parts retain bytes without the old 3 MB cap', async ({page}) 
   const zip = await JSZip.loadAsync(sample);
   const media = randomBytes(4_000_000);
   zip.file('word/media/large.bin', media);
+  zip.file('[Content_Types].xml', (await zip.file('[Content_Types].xml').async('string')).replace('</Types>', '<Override PartName="/word/media/large.bin" ContentType="application/vnd.openxmlformats-officedocument.oleObject"/></Types>'));
   await upload(page, await zip.generateAsync({type:'nodebuffer',compression:'STORE'}), 'large.docx');
   await page.locator('#filter').fill('large.bin');
   await page.locator('#parts button').click();

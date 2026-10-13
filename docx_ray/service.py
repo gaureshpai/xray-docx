@@ -184,7 +184,12 @@ def _inspect(data, filename, limits):
             content_type = overrides.get(
                 name, defaults.get(name.rsplit(".", 1)[-1].lower(), "application/octet-stream")
             )
-            is_xml = name.lower().endswith((".xml", ".rels")) or "xml" in content_type.lower()
+            media_type = content_type.split(";", 1)[0].strip().lower()
+            is_xml = (
+                name.lower().endswith((".xml", ".rels"))
+                or media_type in {"application/xml", "text/xml"}
+                or media_type.endswith("+xml")
+            )
             part = {
                 "path": name,
                 "bytes": entry.file_size,

@@ -8,6 +8,10 @@ const CONTENT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = new Set(['http://schemas.openxmlformats.org/package/2006/relationships','http://purl.oclc.org/ooxml/package/relationships']);
 const OFFICE_DOCUMENT = new Set(['http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument','http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument']);
 const MAIN_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
+const xmlMediaType = value => {
+  const type = value.split(';', 1)[0].trim().toLowerCase();
+  return type === 'application/xml' || type === 'text/xml' || type.endsWith('+xml');
+};
 const localChildren = node => [...node.childNodes].filter(child => child.nodeType === 1);
 const list = (node, ns, name) => [...node.getElementsByTagNameNS(ns, name)];
 const attr = (node, ns, name) => node.getAttributeNS(ns, name) || '';
@@ -167,7 +171,7 @@ export class DocxRaySDK {
     // Regression tests compare these values with actual uncompressed bytes.
     const parts = entries.map(file => {
       const contentType = overrides.get(file.name) || defaults.get(file.name.split('.').pop().toLowerCase()) || 'application/octet-stream';
-      return {path:file.name, kind:/\.(xml|rels)$/i.test(file.name) || /xml/i.test(contentType) ? 'xml' : 'binary', contentType,
+      return {path:file.name, kind:/\.(xml|rels)$/i.test(file.name) || xmlMediaType(contentType) ? 'xml' : 'binary', contentType,
         bytes:file._data?.uncompressedSize ?? 0, compressedBytes:file._data?.compressedSize ?? 0};
     });
     progress('Mapping document text, comments and tracked changes…');

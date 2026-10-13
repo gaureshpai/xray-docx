@@ -19,8 +19,8 @@ Open http://127.0.0.1:8000.
 ## Quick checks
 
 1. Try the sample, filter for `styles.xml`, and open its raw XML.
-2. Open a document with comments and tracked edits. Check Reviews and each record's source path; raw parts remain available for all other markup.
-3. Check text containing tabs/line breaks, deletions, and moved text.
+2. Open a document with comments and tracked edits. Check Reviews, including multi-paragraph comments and blank lines; use **Open source part** to jump to each record's raw XML.
+3. Check text containing tabs/line breaks, deletions, and moved text. Removed text boxes remain accessible as raw paragraph snippets without exposing their text in the current-text projection.
 4. Download a single original part and the XML ZIP. The tests compare these to the original DOCX bytes.
 5. Cancel loading or processing, then open another document.
 6. Try a document over 3 MB and a corrupt document. File capacity still depends on browser memory and supported ZIP formats.

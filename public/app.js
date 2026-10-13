@@ -28,7 +28,7 @@ function setBusy(value) {
   for (const id of ['file', 'sample']) $(id).disabled = value;
   $('export').disabled = value || !currentFile;
   $('download').disabled = value || !selectedPart;
-  for (const button of document.querySelectorAll('#parts button, #paragraphs button')) button.disabled = value;
+  for (const button of document.querySelectorAll('#parts button, #paragraphs button, #reviews button')) button.disabled = value;
   $('cancel').hidden = !value;
   $('dropzone').setAttribute('aria-busy', String(value));
 }
@@ -154,6 +154,15 @@ async function render(version) {
     const card = element('div', undefined, 'relationship');
     card.append(element('strong', `${review.type} · ${review.author || 'Unknown author'} · ID ${review.id}`), element('p', review.text || '(formatting / structural change)'), element('pre', review.xml));
     card.append(element('small', `${review.part}${review.date ? ` · ${review.date}` : ''}`));
+    const source = element('button', 'Open source part', 'link');
+    source.type = 'button';
+    source.disabled = busy;
+    source.addEventListener('click', () => {
+      if (busy) return;
+      showTab('raw');
+      selectPart(documentResult.parts.find(part => part.path === review.part));
+    });
+    card.append(source);
     return card;
   }));
   if (!$('reviews').children.length) $('reviews').append(element('p', 'No parsed comments or revision records found. Explore Raw XML for every part.', 'muted'));

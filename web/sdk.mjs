@@ -18,13 +18,21 @@ function pushChildren(stack, node) {
 }
 const REVISION_TYPES = new Set(['ins','del','moveFrom','moveTo','rPrChange','pPrChange','tblPrChange','tblGridChange','trPrChange','tcPrChange','sectPrChange','numberingChange','cellIns','cellDel','cellMerge','customXmlInsRangeStart','customXmlDelRangeStart','customXmlMoveFromRangeStart','customXmlMoveToRangeStart']);
 function textProjection(root, {removed=false, nestedParagraphs=true} = {}) {
+  // A paragraph discovered independently can still belong to a removed drawing.
+  if (!removed && !nestedParagraphs) {
+    for (let parent = root.parentNode; parent; parent = parent.parentNode) {
+      if (WORD.has(parent.namespaceURI) && ['del','moveFrom'].includes(parent.localName)) return '';
+    }
+  }
   const chunks = [], stack = [root];
+  let paragraphCount = 0;
   while (stack.length) {
     const node = stack.pop();
     if (node.nodeType !== 1) continue;
     if (WORD.has(node.namespaceURI)) {
       if (!removed && ['del','moveFrom'].includes(node.localName)) continue;
       if (!nestedParagraphs && node !== root && node.localName === 'p') continue;
+      if (nestedParagraphs && node.localName === 'p' && paragraphCount++) chunks.push('\n');
       if (node.localName === 't' || (removed && node.localName === 'delText')) {chunks.push(node.textContent); continue;}
       if (node.localName === 'tab') chunks.push('\t');
       if (['br','cr'].includes(node.localName)) chunks.push('\n');

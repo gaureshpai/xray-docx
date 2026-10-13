@@ -50,3 +50,24 @@ test('comment cards show current text while removed text remains in revision rec
   assert.equal(result.revisions.find(r => r.id === '8').text, 'old');
   assert.equal(result.revisions.find(r => r.id === '9').text, 'moved');
 });
+
+test('removed text-box paragraphs stay mapped but do not leak into current text', async () => {
+  for (const type of ['del','moveFrom']) {
+    const bytes = await fixture(`<w:p><w:r><w:t>Visible</w:t></w:r><w:${type} w:id="20"><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Removed box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:${type}></w:p>`);
+    const sdk = new DocxRaySDK();
+    const result = await sdk.inspect(bytes);
+    assert.deepEqual(result.paragraphs.map(p => p.text), ['Visible','']);
+    assert.equal(result.revisions.find(r => r.id === '20').text, 'Removed box');
+    assert.match(sdk.paragraph(1), /Removed box/);
+  }
+});
+
+test('multi-paragraph review text preserves boundaries, empty paragraphs and inline breaks', async () => {
+  const xml = `<w:comments xmlns:w="${WORD}"><w:comment w:id="30"><w:p><w:r><w:t>First</w:t><w:br/><w:t>line</w:t></w:r></w:p><w:p/><w:p><w:r><w:t>Last</w:t></w:r><w:del><w:r><w:delText>hidden</w:delText></w:r></w:del></w:p></w:comment></w:comments>`;
+  const bytes = await fixture('<w:p/>', {'word/comments.xml':xml});
+  const sdk = new DocxRaySDK();
+  const result = await sdk.inspect(bytes);
+  assert.equal(result.comments[0].text, 'First\nline\n\nLast');
+  assert.equal((await sdk.part('word/comments.xml')).xml, xml);
+  assert.equal(Buffer.from(await sdk.download('word/comments.xml')).toString(), xml);
+});

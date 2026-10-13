@@ -26,7 +26,7 @@ The explorer includes XML parts identified by filename or package content type: 
 
 Reviews parses comment elements from matching comment parts and common revision types in the main document: insertion, deletion, move-from, move-to, and selected formatting changes. It is not a complete semantic Word review renderer. Extended comment/threading metadata and revisions in other parts remain available in Raw parts.
 
-The text projection omits deleted text. Reviews and Raw parts expose deletion markup. Layout, fields, numbering, merged tables, drawings, and pagination are not rendered as Word renders them.
+The text projection omits deleted text, including nested text-box paragraphs with deleted/moved-from ancestors. Their paragraph indices and raw snippets remain available. Reviews preserve paragraph boundaries and blank paragraphs; each card can open its original source part. Reviews and Raw parts expose deletion markup. Layout, fields, numbering, merged tables, drawings, and pagination are not rendered as Word renders them.
 
 JSZip verifies entry CRCs. Encrypted, unsupported ZIP variants and macro-enabled/legacy document formats are rejected. External relationships are never fetched. DTD/entity declarations are never parsed; affected parts remain available as raw XML or original bytes.
 

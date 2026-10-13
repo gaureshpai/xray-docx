@@ -170,3 +170,26 @@ test('document markup stays text and the page fits the viewport', async ({page},
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await page.screenshot({path:testInfo.outputPath('inspection.png'),fullPage:true});
 });
+
+test('removed text boxes stay raw and multi-paragraph reviews link to their original source', async ({page}) => {
+  const zip = await JSZip.loadAsync(reviewed);
+  const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  zip.file('word/document.xml', `<w:document xmlns:w="${ns}"><w:body><w:p><w:r><w:t>Visible</w:t></w:r><w:del w:id="20"><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Removed box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:del></w:p></w:body></w:document>`);
+  const comments = `<w:comments xmlns:w="${ns}"><w:comment w:id="30"><w:p><w:r><w:t>First</w:t><w:br/><w:t>line</w:t></w:r></w:p><w:p/><w:p><w:r><w:t>Last</w:t></w:r></w:p></w:comment></w:comments>`;
+  zip.file('word/comments.xml', comments);
+  await upload(page, await zip.generateAsync({type:'nodebuffer'}));
+  await page.locator('#visual-tab').click();
+  await expect(page.locator('#paragraphs')).not.toContainText('Removed box');
+  await page.locator('#paragraphs button').nth(1).click();
+  await expect(page.locator('#snippet')).toContainText('Removed box');
+  await page.locator('#reviews-tab').click();
+  const card = page.locator('#reviews .relationship').filter({has:page.locator('strong', {hasText:'Comment'})});
+  expect(await card.locator('p').innerText()).toBe('First\nline\n\nLast');
+  await expect(card.locator('p')).toHaveCSS('white-space', 'pre-wrap');
+  await expect(page.locator('#reviews')).toContainText('Removed box');
+  await card.getByRole('button', {name:'Open source part'}).click();
+  await expect(page.locator('#raw-tab')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#partname')).toHaveText('word/comments.xml');
+  await expect(page.locator('#xml')).toHaveText(comments);
+  expect((await download(page, '#download')).bytes).toEqual(Buffer.from(comments));
+});

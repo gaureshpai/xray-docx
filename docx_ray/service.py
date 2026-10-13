@@ -6,6 +6,7 @@ import json
 import posixpath
 import stat
 import zipfile
+import zlib
 from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 
@@ -139,7 +140,7 @@ def inspect_docx(data, filename="document.docx", limits=DEFAULT_LIMITS):
         return _inspect(data, filename, limits)
     except DocxError:
         raise
-    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError) as exc:
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError, zlib.error) as exc:
         raise DocxError("Invalid, encrypted, corrupt, or unsupported ZIP archive.") from exc
 
 

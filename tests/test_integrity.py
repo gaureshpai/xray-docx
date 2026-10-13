@@ -15,26 +15,48 @@ from docx_ray.service import inspect_docx, xml_bundle
 SAMPLE = (Path(__file__).resolve().parents[1] / "public/sample.docx").read_bytes()
 
 
-def binary_fixture(*, corrupt=False, null_name=False, size=32):
+def binary_fixture(*, corrupt=False, null_name=False, size=32, deflated=False):
     output = io.BytesIO()
     name = "word/media/nullXtail.bin"
     with zipfile.ZipFile(io.BytesIO(SAMPLE)) as source, zipfile.ZipFile(output, "w") as target:
         for entry in source.infolist():
             target.writestr(entry, source.read(entry))
-        target.writestr(name, bytes(range(32)) * (size // 32), compress_type=zipfile.ZIP_STORED)
+        target.writestr(
+            name,
+            bytes(range(32)) * (size // 32),
+            compress_type=zipfile.ZIP_DEFLATED if deflated else zipfile.ZIP_STORED,
+        )
     data = bytearray(output.getvalue())
     if corrupt:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             entry = archive.getinfo(name)
             offset = entry.header_offset
         name_size, extra_size = struct.unpack_from("<HH", data, offset + 26)
-        data[offset + 30 + name_size + extra_size] ^= 1
+        start = offset + 30 + name_size + extra_size
+        if deflated:
+            data[start] = 7  # Reserved DEFLATE block type.
+        else:
+            data[start] ^= 1
     if null_name:
         data = data.replace(name.encode(), name.replace("X", "\x00").encode())
     return bytes(data)
 
 
 class BinaryIntegrityTests(unittest.TestCase):
+    def test_malformed_deflate_binary_returns_document_error(self):
+        with self.assertRaisesRegex(DocxError, "corrupt"):
+            inspect_docx(binary_fixture(corrupt=True, deflated=True))
+
+    def test_cli_deflate_error_has_no_traceback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "deflate.docx"
+            source.write_bytes(binary_fixture(corrupt=True, deflated=True))
+            result = subprocess.run([sys.executable, "-m", "docx_ray.cli", str(source)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("corrupt", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertEqual(result.stdout, "")
+
     def test_corrupt_binary_entry_rejected(self):
         with self.assertRaisesRegex(DocxError, "corrupt"):
             inspect_docx(binary_fixture(corrupt=True))

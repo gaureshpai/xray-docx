@@ -1,6 +1,6 @@
 # Test the audit changes
 
-All six audit fixes are together on `audit/large-documents`. The PRs are stacked in this order: package validation (#5), review extraction (#7), browser recovery (#9), XML validation (#11), archive fidelity (#13), and large-document handling (#15). Check the latest PR's Actions results for the tested commit.
+All six audit fixes are consolidated in PR #5, targeting `main`, on `audit/package-validation`. It covers package validation, review extraction, browser recovery, XML validation, archive fidelity, and large-document handling. Check PR #5's latest Actions results for the tested commit.
 
 ## Open the website
 
@@ -8,7 +8,7 @@ With Node 24.15+ and Python 3.12+:
 
 ```sh
 git fetch origin
-git switch --track origin/audit/large-documents
+git switch --track origin/audit/package-validation
 npm ci --ignore-scripts
 npm run build
 python -m docx_ray.server
@@ -37,4 +37,4 @@ npm run test:e2e
 
 CI serves the built app with the configured hosting security headers. Its `browser-test-results` artifact contains synthetic screenshots and traces for failed cases.
 
-The website remains client-only. These changes require no database migration, conversion server, or application secrets. The audit PRs are open for review; `main` is unchanged until they are merged. No hosted preview URL is claimed.
+The website remains client-only. These changes require no database migration, conversion server, or application secrets. PR #5 is open for review; `main` is unchanged until it is merged. No hosted preview URL is claimed.

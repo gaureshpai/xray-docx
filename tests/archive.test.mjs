@@ -47,7 +47,7 @@ test('valid Unicode part paths and directory entries preserve original downloads
   assert.deepEqual(await sdk.download('word/media/日本.bin'), new Uint8Array([1,2,3]));
 });
 
-for (const [option, args] of [['corrupt','corrupt=True'],['null_name','null_name=True'],['malformed deflate','corrupt=True, deflated=True']]) {
+for (const [option, args] of [['corrupt','corrupt=True'],['null_name','null_name=True'],['malformed deflate','corrupt=True, deflated=True'],['under-reported deflate','deflated=True, under_report=True'],['under-reported stored data','under_report=True']]) {
   test(`browser SDK rejects binary integrity fixture: ${option}`, async () => {
     const fixture = spawnSync('python3', ['-c', `import sys; from tests.test_integrity import binary_fixture; sys.stdout.buffer.write(binary_fixture(${args}))`]);
     assert.equal(fixture.status,0,fixture.stderr.toString());

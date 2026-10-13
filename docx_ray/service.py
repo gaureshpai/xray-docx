@@ -5,6 +5,7 @@ import io
 import json
 import posixpath
 import stat
+import struct
 import zipfile
 import zlib
 from pathlib import PurePosixPath
@@ -140,8 +141,57 @@ def inspect_docx(data, filename="document.docx", limits=DEFAULT_LIMITS):
         return _inspect(data, filename, limits)
     except DocxError:
         raise
-    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError, zlib.error) as exc:
+    except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, OSError, zlib.error, UnicodeError) as exc:
         raise DocxError("Invalid, encrypted, corrupt, or unsupported ZIP archive.") from exc
+
+
+def validate_entry(data, archive, entry):
+    # Check the local header/name and entry overlap through the public ZIP API.
+    with archive.open(entry):
+        pass
+    name_size, extra_size = struct.unpack_from("<HH", data, entry.header_offset + 26)
+    start = entry.header_offset + 30 + name_size + extra_size
+    end = start + entry.compress_size
+    if end > len(data):
+        raise DocxError("Archive entry size mismatch.")
+    remaining, crc = entry.file_size, 0
+
+    def consume(chunk):
+        nonlocal remaining, crc
+        remaining -= len(chunk)
+        if remaining < 0:
+            raise DocxError("Archive entry size mismatch.")
+        crc = zlib.crc32(chunk, crc)
+
+    if entry.compress_type == zipfile.ZIP_STORED:
+        if entry.compress_size != entry.file_size:
+            raise DocxError("Archive entry size mismatch.")
+        for offset in range(start, end, 1_048_576):
+            consume(memoryview(data)[offset : min(offset + 1_048_576, end)])
+    else:
+        # ZipExtFile caps output at file_size, hiding forged prefix-size/CRC pairs.
+        # Read the raw stream with bounded output and verify its actual end.
+        inflater = zlib.decompressobj(-15)
+        for offset in range(start, end, 65_536):
+            chunk = memoryview(data)[offset : min(offset + 65_536, end)]
+            while True:
+                limit = min(1_048_576, remaining + 1)
+                output = inflater.decompress(chunk, limit)
+                consume(output)
+                if inflater.unused_data:
+                    raise zipfile.BadZipFile("Trailing compressed entry data.")
+                if inflater.unconsumed_tail:
+                    chunk = inflater.unconsumed_tail
+                elif not inflater.eof and len(output) == limit:
+                    chunk = b""
+                else:
+                    break
+        if not inflater.eof:
+            raise zipfile.BadZipFile("Truncated compressed entry.")
+    if remaining:
+        raise DocxError("Archive entry size mismatch.")
+    if crc != entry.CRC:
+        raise zipfile.BadZipFile("Entry CRC mismatch.")
 
 
 def _inspect(data, filename, limits):
@@ -167,6 +217,8 @@ def _inspect(data, filename, limits):
                 raise DocxError("Expanded archive exceeds the safety limit.")
         if "[Content_Types].xml" not in seen or "_rels/.rels" not in seen:
             raise DocxError("Not an OOXML package: content types and package relationships are required.")
+        for entry in entries:
+            validate_entry(data, archive, entry)
         if archive.getinfo("[Content_Types].xml").file_size > limits.xml_bytes:
             raise DocxError("Combined XML exceeds the safety limit.")
         _, content_root = parse_xml(archive.read("[Content_Types].xml"))
@@ -222,20 +274,6 @@ def _inspect(data, filename, limits):
                     if not raw.startswith((b"\xff\xfe", b"\xfe\xff", b"\x00\x00\xfe\xff"))
                     else "unicode-bom",
                 )
-            else:
-                # Consume binary parts too, so CRC/local-header errors cannot hide
-                # behind XML-only inspection. Keep working memory bounded.
-                remaining = entry.file_size
-                with archive.open(entry) as source:
-                    while True:
-                        chunk = source.read(min(1_048_576, remaining + 1))
-                        if not chunk:
-                            break
-                        remaining -= len(chunk)
-                        if remaining < 0:
-                            raise DocxError("Archive entry size mismatch.")
-                if remaining:
-                    raise DocxError("Archive entry size mismatch.")
             parts.append(part)
         content_root = roots["[Content_Types].xml"]
         if content_root.tag != f"{{{CONTENT_NS}}}Types":

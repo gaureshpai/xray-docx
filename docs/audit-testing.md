@@ -1,6 +1,6 @@
 # Test the audit changes
 
-All six audit fixes are consolidated in PR #5, targeting `main`, on `audit/package-validation`. It covers package validation, review extraction, browser recovery, XML validation, archive fidelity, and large-document handling. Check PR #5's latest Actions results for the tested commit.
+The audit changes are consolidated in PR #5 for `main`. It covers package validation, review extraction, browser recovery, XML validation, archive fidelity, and large-document handling. Check PR #5's latest Actions results for the tested commit.
 
 ## Open the website
 
@@ -8,7 +8,8 @@ With Node 24.15+ and Python 3.12+:
 
 ```sh
 git fetch origin
-git switch --track origin/audit/package-validation
+git switch main
+git pull --ff-only
 npm ci --ignore-scripts
 npm run build
 python -m docx_ray.server
@@ -37,4 +38,14 @@ npm run test:e2e
 
 CI serves the built app with the configured hosting security headers. Its `browser-test-results` artifact contains synthetic screenshots and traces for failed cases.
 
-The website remains client-only. These changes require no database migration, conversion server, or application secrets. PR #5 is open for review; `main` is unchanged until it is merged. No hosted preview URL is claimed.
+The website remains client-only. These changes require no database migration, conversion server, or application secrets. Use `main` after PR #5 is merged. No hosted preview URL is claimed.
+
+## Check CLI reviews
+
+```sh
+python -m docx_ray.cli reviewed.docx --json
+python -m docx_ray.cli reviewed.docx --part word/comments.xml
+python -m docx_ray.cli reviewed.docx --output original-xml.zip
+```
+
+JSON includes `comments` and `revisions` with source part, ID, author, date, text and XML snippets. Comment anchors and additional review/thread metadata remain in original raw XML. The CLI retains documented safety limits and rejects malformed XML; the website has no fixed size/count cap. Shared fixtures compare both engines, including renamed comment parts, headers, strict namespaces and UTF-16/32 comments, and compare both exports to original bytes.

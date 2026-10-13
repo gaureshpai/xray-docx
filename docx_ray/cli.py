@@ -31,6 +31,7 @@ def main(argv=None):
             print(f"DOCX Ray · {result['filename']}\nMain XML: {result['mainPart']}")
             for key, value in result["summary"].items():
                 print(f"{key}: {value}")
+            print(f"comments: {len(result['comments'])}\nrevisions: {len(result['revisions'])}")
             for part in result["parts"]:
                 print(f"{part['kind']:6} {part['bytes']:8,} B  {part['path']}")
         if args.output:

@@ -23,6 +23,65 @@ CONTENT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 DOC_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
 }
+OFFICE_DOCUMENT = {
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+    "http://purl.oclc.org/ooxml/officeDocument/relationships/officeDocument",
+}
+REVISION_TYPES = {
+    "ins",
+    "del",
+    "moveFrom",
+    "moveTo",
+    "rPrChange",
+    "pPrChange",
+    "tblPrChange",
+    "tblGridChange",
+    "trPrChange",
+    "tcPrChange",
+    "sectPrChange",
+    "numberingChange",
+    "cellIns",
+    "cellDel",
+    "cellMerge",
+    "customXmlInsRangeStart",
+    "customXmlDelRangeStart",
+    "customXmlMoveFromRangeStart",
+    "customXmlMoveToRangeStart",
+}
+
+
+def word_name(node):
+    namespace, _, name = node.tag.removeprefix("{").partition("}")
+    return name if namespace in WORD_NAMESPACES else None
+
+
+def text_projection(root, *, removed=False, nested_paragraphs=True):
+    chunks, stack = [], [root]
+    paragraphs = 0
+    while stack:
+        node = stack.pop()
+        name = word_name(node)
+        if not removed and name in {"del", "moveFrom"}:
+            continue
+        if not nested_paragraphs and node is not root and name == "p":
+            continue
+        if nested_paragraphs and name == "p":
+            if paragraphs:
+                chunks.append("\n")
+            paragraphs += 1
+        if name == "t" or (removed and name == "delText"):
+            chunks.append("".join(node.itertext()))
+            continue
+        if name == "tab":
+            chunks.append("\t")
+        if name in {"br", "cr"}:
+            chunks.append("\n")
+        if name == "noBreakHyphen":
+            chunks.append("\u2011")
+        if name == "softHyphen":
+            chunks.append("\u00ad")
+        stack.extend(reversed(node))
+    return "".join(chunks)
 
 
 def parse_xml(raw):
@@ -41,7 +100,7 @@ def parse_xml(raw):
     if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
         raise DocxError("DTD and entity declarations are not accepted.")
     try:
-        root = ET.fromstring(raw)
+        root = ET.fromstring(text)
         stack = [(root, 0)]
         while stack:
             node, depth = stack.pop()
@@ -101,18 +160,37 @@ def _inspect(data, filename, limits):
                 raise DocxError("Expanded archive exceeds the safety limit.")
         if "[Content_Types].xml" not in seen or "_rels/.rels" not in seen:
             raise DocxError("Not an OOXML package: content types and package relationships are required.")
+        if archive.getinfo("[Content_Types].xml").file_size > limits.xml_bytes:
+            raise DocxError("Combined XML exceeds the safety limit.")
+        _, content_root = parse_xml(archive.read("[Content_Types].xml"))
+        if content_root.tag != f"{{{CONTENT_NS}}}Types":
+            raise DocxError("Invalid content types root.")
+        overrides = {
+            x.get("PartName", "").lstrip("/"): x.get("ContentType", "")
+            for x in content_root
+            if x.tag == f"{{{CONTENT_NS}}}Override"
+        }
+        defaults = {
+            x.get("Extension", "").lower(): x.get("ContentType", "")
+            for x in content_root
+            if x.tag == f"{{{CONTENT_NS}}}Default"
+        }
         parts, roots = [], {}
         xml_size = 0
         for entry in entries:
             if entry.is_dir():
                 continue
             name = entry.filename
-            is_xml = name.lower().endswith((".xml", ".rels"))
+            content_type = overrides.get(
+                name, defaults.get(name.rsplit(".", 1)[-1].lower(), "application/octet-stream")
+            )
+            is_xml = name.lower().endswith((".xml", ".rels")) or "xml" in content_type.lower()
             part = {
                 "path": name,
                 "bytes": entry.file_size,
                 "compressedBytes": entry.compress_size,
                 "kind": "xml" if is_xml else "binary",
+                "contentType": content_type,
             }
             if is_xml:
                 xml_size += entry.file_size
@@ -176,11 +254,12 @@ def _inspect(data, filename, limits):
                     "exists": None if external else resolved in seen,
                 }
                 relationships.append(item)
-                if source == "/" and item["type"] == "officeDocument" and not external:
+                if source == "/" and rel.get("Type") in OFFICE_DOCUMENT and not external:
+                    if main_path:
+                        raise DocxError("Multiple main document relationships.")
                     main_path = resolved
         if not main_path or main_path not in roots:
             raise DocxError("Package does not contain its main office document XML.")
-        overrides = {x.get("PartName", "").lstrip("/"): x.get("ContentType") for x in content_root}
         if overrides.get(main_path) not in DOC_TYPES:
             raise DocxError("This package is not a macro-free DOCX document.")
         main = roots[main_path]
@@ -192,13 +271,43 @@ def _inspect(data, filename, limits):
             return f"{{{ns}}}{tag}"
 
         paragraphs = []
+        parents = {child: parent for parent in main.iter() for child in parent}
         for index, paragraph in enumerate(main.iter(q("p"))):
-            text = "".join(
-                (node.text or "") if node.tag == q("t") else "\t" if node.tag == q("tab") else "\n"
-                for node in paragraph.iter()
-                if node.tag in (q("t"), q("tab"), q("br"), q("cr"))
-            )
+            ancestor = parents.get(paragraph)
+            removed = False
+            while ancestor is not None:
+                if word_name(ancestor) in {"del", "moveFrom"}:
+                    removed = True
+                    break
+                ancestor = parents.get(ancestor)
+            text = "" if removed else text_projection(paragraph, nested_paragraphs=False)
             paragraphs.append({"index": index, "text": text, "xml": ET.tostring(paragraph, encoding="unicode")})
+        comments, revisions = [], []
+        comment_targets = {r["resolved"] for r in relationships if not r["external"] and r["type"] == "comments"}
+        for part in parts:
+            path = part["path"]
+            if path not in roots or not (
+                path == main_path
+                or "wordprocessingml" in part["contentType"]
+                or path in comment_targets
+                or PurePosixPath(path).name.lower().startswith("comments")
+            ):
+                continue
+            for node in roots[path].iter():
+                kind = word_name(node)
+                if kind != "comment" and kind not in REVISION_TYPES:
+                    continue
+                namespace = node.tag.split("}")[0] + "}"
+                record = {
+                    "part": path,
+                    **{key: node.get(namespace + key, "") for key in ("id", "author", "date")},
+                    "text": text_projection(node, removed=kind in {"del", "moveFrom"}),
+                    "xml": ET.tostring(node, encoding="unicode"),
+                }
+                if kind == "comment":
+                    comments.append(record)
+                else:
+                    revisions.append({**record, "type": kind})
         warnings = [
             "Visual preview is a text projection, not a Word layout renderer.",
             "Paragraph snippets are reserialized; the Raw XML tab preserves decoded source text.",
@@ -215,6 +324,8 @@ def _inspect(data, filename, limits):
             "parts": parts,
             "relationships": relationships,
             "paragraphs": paragraphs,
+            "comments": comments,
+            "revisions": revisions,
             "summary": {
                 "parts": len(parts),
                 "xmlParts": len(roots),

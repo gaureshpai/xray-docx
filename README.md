@@ -45,3 +45,5 @@ Vercel builds with `npm run build` and serves `public/`. No conversion functions
 See the [architecture guide](docs/architecture.md), [technical details](docs/technical.md), and [contribution rules](CONTRIBUTING.md).
 
 For the current audit branch and a short manual checklist, see [audit testing](docs/audit-testing.md).
+
+CLI `--json` includes source-labelled `comments` and `revisions`, alongside raw parts and paragraph mappings. Both engines project current text without deleted/moved-from content; original XML retains all review markup and comment anchors.

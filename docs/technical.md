@@ -32,7 +32,7 @@ JSZip verifies entry CRCs. Encrypted, unsupported ZIP variants and macro-enabled
 
 ## CLI
 
-Python 3.12+, no production dependencies. `docx_ray/service.py` performs bounded ZIP/XML inspection. `models.py` defines CLI safety defaults. `cli.py` prints parts or exports original XML bytes. The CLI retains a 20 MB input limit, 50 MB expansion limit, 20 MB combined XML limit, 512 entries, and a nesting guard; these do not apply to the client-only website.
+Python 3.12+, no production dependencies. `docx_ray/service.py` performs bounded ZIP/XML inspection. `models.py` defines CLI safety defaults. `cli.py` prints parts, structured comment/revision JSON or exports original XML bytes. Review extraction covers the same common revision types as the browser, with source paths and current-text projection. Content types identify XML parts even with nonstandard extensions; decoded UTF-16/32 XML is parsed without changing original export bytes. The CLI retains a 20 MB input limit, 50 MB expansion limit, 20 MB combined XML limit, 512 entries, and a nesting guard; these do not apply to the client-only website.
 
 ## Tests
 

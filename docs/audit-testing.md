@@ -12,8 +12,10 @@ git switch main
 git pull --ff-only
 npm ci --ignore-scripts
 npm run build
-python -m docx_ray.server
+py -3 -m docx_ray.server
 ```
+
+On macOS or Linux, use `python -m docx_ray.server` instead.
 
 Open http://127.0.0.1:8000.
 
@@ -31,7 +33,7 @@ Open http://127.0.0.1:8000.
 
 ```sh
 npm test
-python -m unittest discover -v
+py -3 -m unittest discover -v  # Windows; use python -m unittest discover -v elsewhere
 npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
@@ -42,10 +44,12 @@ The website remains client-only. These changes require no database migration, co
 
 ## Check CLI reviews
 
+On Windows, run these commands with `py -3`; on macOS or Linux, use `python`.
+
 ```sh
-python -m docx_ray.cli reviewed.docx --json
-python -m docx_ray.cli reviewed.docx --part word/comments.xml
-python -m docx_ray.cli reviewed.docx --output original-xml.zip
+py -3 -m docx_ray.cli reviewed.docx --json
+py -3 -m docx_ray.cli reviewed.docx --part word/comments.xml
+py -3 -m docx_ray.cli reviewed.docx --output original-xml.zip
 ```
 
 JSON includes `comments` and `revisions` with source part, ID, author, date, text and XML snippets. Comment anchors and additional review/thread metadata remain in original raw XML. The CLI retains documented safety limits and rejects malformed XML; the website has no fixed size/count cap. Shared fixtures compare both engines, including renamed comment parts, headers, strict namespaces and UTF-16/32 comments, and compare both exports to original bytes.

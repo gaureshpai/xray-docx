@@ -2,7 +2,7 @@ const {test, expect} = require('@playwright/test');
 const {readFileSync, promises:fs} = require('node:fs');
 const {randomBytes} = require('node:crypto');
 const JSZip = require('jszip');
-const {spawnSync} = require('node:child_process');
+const python = require('../python.cjs');
 
 const sample = readFileSync('public/sample.docx');
 const reviewed = readFileSync('tests/reviewed.docx');
@@ -82,7 +82,7 @@ test('invalid files fail visibly and a subsequent document succeeds', async ({pa
 });
 
 test('duplicate ZIP entries reject visibly and a valid document can recover', async ({page}) => {
-  const result = spawnSync('python3', ['-c', 'import sys; from tests.test_engine import altered; sys.stdout.buffer.write(altered(extra=[("customXml/duplicate.xml", b"<old/>"),("customXml/duplicate.xml", b"<new/>")]))']);
+  const result = python.spawnPythonSync(['-c', 'import sys; from tests.test_engine import altered; sys.stdout.buffer.write(altered(extra=[("customXml/duplicate.xml", b"<old/>"),("customXml/duplicate.xml", b"<new/>")]))']);
   expect(result.status).toBe(0);
   await page.locator('#file').setInputFiles({name:'duplicate.docx',mimeType:'application/octet-stream',buffer:result.stdout});
   await expect(page.locator('#status')).toContainText('Duplicate archive entry');

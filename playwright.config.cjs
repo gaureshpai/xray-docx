@@ -9,7 +9,7 @@ module.exports = defineConfig({
   retries:0,
   reporter:'list',
   use:{baseURL:'http://127.0.0.1:8123', acceptDownloads:true, trace:'retain-on-failure'},
-  webServer:{command:'python3 -m tests.browser_server', url:'http://127.0.0.1:8123', reuseExistingServer:false},
+  webServer:{command:'node tests/python.cjs -m tests.browser_server', url:'http://127.0.0.1:8123', reuseExistingServer:false},
   projects:[
     {name:'chromium', use:{...devices['Desktop Chrome']}},
     {name:'firefox', use:{...devices['Desktop Firefox']}},

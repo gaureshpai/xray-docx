@@ -21,22 +21,24 @@ Node 24.15+ and Python 3.12+ for the local static server:
 ```sh
 npm ci --ignore-scripts
 npm run build
-python -m docx_ray.server
+py -3 -m docx_ray.server
 ```
 
-Open http://127.0.0.1:8000. The server only serves static files; conversion runs in your browser.
+On macOS or Linux, use `python -m docx_ray.server` instead. Open http://127.0.0.1:8000. The server only serves static files; conversion runs in your browser.
 
 ## Use the offline CLI
 
+On Windows, use `py -3` to run Python; on macOS or Linux, use `python`.
+
 ```sh
-python -m docx_ray report.docx
-python -m docx_ray report.docx --part word/document.xml
-python -m docx_ray report.docx --output xml-parts.zip
+py -3 -m docx_ray report.docx
+py -3 -m docx_ray report.docx --part word/document.xml
+py -3 -m docx_ray report.docx --output xml-parts.zip
 ```
 
 ## Test and deploy
 
-Run `npm test` and `python -m unittest discover -v`.
+Run `npm test` and `py -3 -m unittest discover -v` on Windows (`python -m unittest discover -v` on macOS or Linux).
 
 For real-browser checks, run `npx playwright install chromium firefox webkit`, then `npm run test:e2e`. CI runs Chromium, Firefox, WebKit, and a mobile Chromium viewport against built assets with the hosting security headers.
 

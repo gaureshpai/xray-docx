@@ -100,7 +100,10 @@ class EngineTests(unittest.TestCase):
     def test_unsafe_paths(self):
         for name in ["../escape.xml", "/absolute.xml", "word/../../escape.xml", "word\\escape.xml", "C:/evil.xml"]:
             with self.subTest(name=name), self.assertRaises(DocxError):
-                inspect_docx(altered(extra=[(name, b"<root/>")]))
+                data = altered(extra=[(name, b"<root/>")])
+                if "\\" in name:
+                    data = data.replace(name.replace("\\", "/").encode(), name.encode())
+                inspect_docx(data)
 
     def test_duplicate_entries(self):
         with self.assertRaises(DocxError):
@@ -155,7 +158,9 @@ class EngineTests(unittest.TestCase):
             [sys.executable, "-m", "docx_ray", "public/sample.docx", "--json"], cwd=ROOT, capture_output=True, text=True
         )
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(json.loads(run.stdout)["summary"]["tables"], 1)
+        result = json.loads(run.stdout)
+        self.assertEqual(result["summary"]["tables"], 1)
+        self.assertTrue(any("ಕನ್ನಡ" in paragraph["text"] for paragraph in result["paragraphs"]))
 
     def test_cli_export_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:

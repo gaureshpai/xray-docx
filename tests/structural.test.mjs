@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, writeFileSync, readFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {spawnSync} from 'node:child_process';
 import JSZip from 'jszip';
 import {DocxRaySDK} from '../web/sdk.mjs';
 import fixture from './structural-fixture.cjs';
+import pythonRunner from './python.cjs';
 
 for (const ns of ['http://schemas.openxmlformats.org/wordprocessingml/2006/main','http://purl.oclc.org/ooxml/wordprocessingml/main']) {
   test(`structural table deletions stay in reviews and raw bytes, with web/CLI parity (${ns})`, async () => {
@@ -17,7 +17,7 @@ for (const ns of ['http://schemas.openxmlformats.org/wordprocessingml/2006/main'
     try {
       const path = join(dir,'tables.docx'), output = join(dir,'xml.zip');
       writeFileSync(path,bytes);
-      const cli = spawnSync('python3',['-m','docx_ray.cli',path,'--json','--output',output],{encoding:'utf8'});
+      const cli = pythonRunner.spawnPythonSync(['-m','docx_ray.cli',path,'--json','--output',output],{encoding:'utf8'});
       assert.equal(cli.status,0,cli.stderr);
       const python = JSON.parse(cli.stdout);
       for (const result of [web,python]) {

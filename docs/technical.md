@@ -40,7 +40,7 @@ Python 3.12+, no production dependencies. `docx_ray/service.py` performs bounded
 
 `npm test` builds the exact worker bundle, tests SDK byte preservation and a valid document above 3 MB, and exercises the page with that worker in JSDOM. It checks comments, tracked changes, binary downloads, Unicode, errors, and no document network requests. These tests do not verify real-browser layout.
 
-`python -m unittest discover -v` checks CLI extraction, safety, and XML exports. Static-server tests confirm there is no document-processing API.
+`py -3 -m unittest discover -v` on Windows (`python -m unittest discover -v` on macOS or Linux) checks CLI extraction, safety, and XML exports. Static-server tests confirm there is no document-processing API.
 
 `public/sample.docx` contains synthetic content. `tests/reviewed.docx` contains a generated comment and synthetic tracked-change XML. `tests/upstream.docx` comes from python-docx commit `e45454602b53e8e572b179ccf1c91093ec9f4ed7`; its MIT license is retained.
 

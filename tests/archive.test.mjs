@@ -1,12 +1,12 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {DocxRaySDK} from '../web/sdk.mjs';
 import JSZip from 'jszip';
+import python from './python.cjs';
 
 function extraEntries(entries) {
-  const result = spawnSync('python3', ['-c', `
+  const result = python.spawnPythonSync(['-c', `
 import json,sys
 from tests.test_engine import altered
 sys.stdout.buffer.write(altered(extra=[(name, text.encode()) for name,text in json.loads(sys.argv[1])]))
@@ -49,7 +49,7 @@ test('valid Unicode part paths and directory entries preserve original downloads
 
 for (const [option, args] of [['corrupt','corrupt=True'],['null_name','null_name=True'],['malformed deflate','corrupt=True, deflated=True'],['under-reported deflate','deflated=True, under_report=True'],['under-reported stored data','under_report=True']]) {
   test(`browser SDK rejects binary integrity fixture: ${option}`, async () => {
-    const fixture = spawnSync('python3', ['-c', `import sys; from tests.test_integrity import binary_fixture; sys.stdout.buffer.write(binary_fixture(${args}))`]);
+    const fixture = python.spawnPythonSync(['-c', `import sys; from tests.test_integrity import binary_fixture; sys.stdout.buffer.write(binary_fixture(${args}))`]);
     assert.equal(fixture.status,0,fixture.stderr.toString());
     await assert.rejects(new DocxRaySDK().inspect(fixture.stdout), option === 'null_name' ? /Unsafe archive path/ : /ZIP|CRC|corrupt/i);
   });

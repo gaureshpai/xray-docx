@@ -26,7 +26,7 @@ def main(argv=None):
                 raise DocxError("XML part not found.")
             print(part["xml"])
         elif args.json:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(json.dumps(result, indent=2, ensure_ascii=True))
         else:
             print(f"DOCX Ray · {result['filename']}\nMain XML: {result['mainPart']}")
             for key, value in result["summary"].items():

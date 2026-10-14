@@ -3,10 +3,11 @@
 const {test, before, after} = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {spawn, spawnSync} = require('node:child_process');
 const {JSDOM} = require('jsdom');
 const {Worker:NodeWorker} = require('node:worker_threads');
 const {join} = require('node:path');
+const JSZip = require('jszip');
+const python = require('./python.cjs');
 const port = 20000 + Math.floor(Math.random() * 20000);
 const origin = `http://127.0.0.1:${port}`;
 let server;
@@ -19,7 +20,7 @@ async function until(predicate, timeout=6000) {
   throw new Error('Timed out waiting for UI state.');
 }
 before(async () => {
-  server = spawn(process.env.PYTHON || 'python3', ['-m', 'docx_ray.server', '--port', String(port)], {stdio:'pipe'});
+  server = python.spawnPython(['-m', 'docx_ray.server', '--port', String(port)], {stdio:'pipe'});
   for (let n = 0; n < 100; n++) {
     try {if ((await fetch(`${origin}/`)).ok) return;} catch {}
     await pause(30);
@@ -137,7 +138,7 @@ test('failed sample downloads clear busy state', async () => {
   } finally {ui.close();}
 });
 test('document text containing markup stays text instead of executable DOM', async () => {
-  const fixture = spawnSync('python3', ['-c', `
+  const fixture = python.spawnPythonSync(['-c', `
 import io,sys,zipfile
 out=io.BytesIO()
 with zipfile.ZipFile('public/sample.docx') as src,zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as dst:
@@ -173,7 +174,6 @@ test('uploads and exports send no document bytes over the network', async () => 
 });
 
 test('the UI accepts a valid document above the former 3 MB cap', async () => {
-  const JSZip = require('jszip');
   const {randomBytes} = require('node:crypto');
   const archive = await JSZip.loadAsync(fs.readFileSync('public/sample.docx'));
   archive.file('word/media/large.bin',randomBytes(4_000_000));

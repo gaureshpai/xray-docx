@@ -194,7 +194,8 @@ test('removed text boxes stay raw and multi-paragraph reviews link to their orig
   await card.getByRole('button', {name:'Open source part'}).click();
   await expect(page.locator('#raw-tab')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('#partname')).toHaveText('word/comments.xml');
-  await expect(page.locator('#xml')).toHaveText(comments);
+  const displayedXml = await page.locator('#xml').textContent();
+  expect(displayedXml.replace(/>\s+</g, '><')).toBe(comments);
   expect((await download(page, '#download')).bytes).toEqual(Buffer.from(comments));
 });
 

@@ -18,7 +18,7 @@ Required package/main XML is rejected when parsing reports malformed markup or f
 
 XML traversal pushes children individually, and large UI collections are assembled in document fragments. This avoids JavaScript's function-argument ceiling when a document contains many sibling runs, paragraphs, or review records. Device memory still determines practical capacity.
 
-Raw parts retain decoded source XML without pretty-printing or reserialization. Original downloads and XML ZIP exports retain source part bytes. Binary parts have a 512-byte hex preview and a full original download. The XML ZIP excludes binary files by design.
+Raw parts display decoded XML formatted for readability. Original downloads and XML ZIP exports retain source part bytes. Binary parts have a 512-byte hex preview and a full original download. The XML ZIP excludes binary files by design.
 
 UTF-8, browser-supported declared encodings, UTF-16, and BOM-marked UTF-32 are decoded. An undecodable part remains available as bytes and hex. Paragraph and review snippets are reserialized and can have different namespace formatting.
 

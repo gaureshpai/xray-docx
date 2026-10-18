@@ -13,11 +13,11 @@ for (const ns of ['http://schemas.openxmlformats.org/wordprocessingml/2006/main'
     const bytes = await fixture.deletedTableFixture(ns);
     const sdk = new DocxRaySDK();
     const web = await sdk.inspect(bytes);
-    const dir = mkdtempSync(join(tmpdir(),'docx-ray-structural-'));
+    const dir = mkdtempSync(join(tmpdir(),'xray-docx-structural-'));
     try {
       const path = join(dir,'tables.docx'), output = join(dir,'xml.zip');
       writeFileSync(path,bytes);
-      const cli = pythonRunner.spawnPythonSync(['-m','docx_ray.cli',path,'--json','--output',output],{encoding:'utf8'});
+      const cli = pythonRunner.spawnPythonSync(['-m','xray_docx.cli',path,'--json','--output',output],{encoding:'utf8'});
       assert.equal(cli.status,0,cli.stderr);
       const python = JSON.parse(cli.stdout);
       for (const result of [web,python]) {

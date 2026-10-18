@@ -10,8 +10,8 @@ from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from docx_ray.models import DEFAULT_LIMITS, DocxError
-from docx_ray.service import inspect_docx, parse_xml, xml_bundle, xml_part
+from xray_docx.models import DEFAULT_LIMITS, DocxError
+from xray_docx.service import inspect_docx, parse_xml, xml_bundle, xml_part
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = (ROOT / "public/sample.docx").read_bytes()
@@ -155,7 +155,10 @@ class EngineTests(unittest.TestCase):
 
     def test_cli_json(self):
         run = subprocess.run(
-            [sys.executable, "-m", "docx_ray", "public/sample.docx", "--json"], cwd=ROOT, capture_output=True, text=True
+            [sys.executable, "-m", "xray_docx", "public/sample.docx", "--json"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
         )
         self.assertEqual(run.returncode, 0, run.stderr)
         result = json.loads(run.stdout)
@@ -165,7 +168,7 @@ class EngineTests(unittest.TestCase):
     def test_cli_export_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "xml.zip"
-            command = [sys.executable, "-m", "docx_ray", "public/sample.docx", "--output", str(output)]
+            command = [sys.executable, "-m", "xray_docx", "public/sample.docx", "--output", str(output)]
             run = subprocess.run(command, cwd=ROOT, capture_output=True)
             self.assertEqual(run.returncode, 0, run.stderr)
             contents = output.read_bytes()
@@ -174,7 +177,7 @@ class EngineTests(unittest.TestCase):
 
     def test_cli_missing_part(self):
         run = subprocess.run(
-            [sys.executable, "-m", "docx_ray", "public/sample.docx", "--part", "missing.xml"],
+            [sys.executable, "-m", "xray_docx", "public/sample.docx", "--part", "missing.xml"],
             cwd=ROOT,
             capture_output=True,
         )

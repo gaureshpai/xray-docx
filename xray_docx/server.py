@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
-    print(f"DOCX Ray static server: http://{args.host}:{args.port}", flush=True)
+    print(f"Xray DOCX static server: http://{args.host}:{args.port}", flush=True)
     ThreadingHTTPServer((args.host, args.port), LocalHandler).serve_forever()
 
 

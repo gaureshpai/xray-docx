@@ -20,7 +20,7 @@ async function until(predicate, timeout=6000) {
   throw new Error('Timed out waiting for UI state.');
 }
 before(async () => {
-  server = python.spawnPython(['-m', 'docx_ray.server', '--port', String(port)], {stdio:'pipe'});
+  server = python.spawnPython(['-m', 'xray_docx.server', '--port', String(port)], {stdio:'pipe'});
   for (let n = 0; n < 100; n++) {
     try {if ((await fetch(`${origin}/`)).ok) return;} catch {}
     await pause(30);
@@ -93,8 +93,8 @@ test('filter and keyboard tabs expose paragraph-to-XML mapping and relationships
     ui.$('raw-tab').dispatchEvent(new ui.window.KeyboardEvent('keydown', {key:'ArrowRight', bubbles:true}));
     assert.equal(ui.$('visual-panel').hidden, false);
     ui.$('paragraphs').children[1].click();
-    await until(() => ui.$('snippet').textContent.includes('Hello from DOCX Ray'));
-    assert.match(ui.$('snippet').textContent, /Hello from DOCX Ray/);
+    await until(() => ui.$('snippet').textContent.includes('Hello from Xray DOCX'));
+    assert.match(ui.$('snippet').textContent, /Hello from Xray DOCX/);
     ui.$('relations-tab').click();
     assert.equal(ui.$('relations-panel').hidden, false);
     assert.match(ui.$('relations').textContent, /officeDocument/);
@@ -111,7 +111,7 @@ test('all-parts and single-part downloads contain original bytes', async () => {
     await until(() => !ui.$('export').disabled);
     ui.$('export').click();
     await until(() => ui.downloads.length === 2);
-    assert.equal(ui.downloads[1].name, 'docx-ray-xml.zip');
+    assert.equal(ui.downloads[1].name, 'xray-docx-xml.zip');
     const bytes = new Uint8Array(await ui.downloads[1].blob.arrayBuffer());
     assert.equal(String.fromCharCode(...bytes.slice(0,2)), 'PK');
   } finally {ui.close();}
@@ -145,7 +145,7 @@ with zipfile.ZipFile('public/sample.docx') as src,zipfile.ZipFile(out,'w',zipfil
  for item in src.infolist():
   raw=src.read(item.filename)
   if item.filename=='word/document.xml':
-   raw=raw.replace(b'Hello from DOCX Ray.', b'&lt;img src=x onerror=alert(1)&gt;')
+    raw=raw.replace(b'Hello from Xray DOCX.', b'&lt;img src=x onerror=alert(1)&gt;')
   dst.writestr(item,raw)
 sys.stdout.buffer.write(out.getvalue())`]);
   assert.equal(fixture.status, 0);

@@ -1,6 +1,8 @@
 {
-  "name": "docx-ray",
+  "name": "xray-docx",
   "private": true,
+  "version": "1.0.0",
+  "description": "Look inside Word documents: client-only XML explorer, comments and tracked changes, and an offline Python CLI.",
   "scripts": {
     "build": "node scripts/build-web.mjs",
     "test": "npm run build && node --test tests/*.test.mjs tests/*.test.cjs",

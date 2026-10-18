@@ -28,7 +28,7 @@ def main(argv=None):
         elif args.json:
             print(json.dumps(result, indent=2, ensure_ascii=True))
         else:
-            print(f"DOCX Ray · {result['filename']}\nMain XML: {result['mainPart']}")
+            print(f"Xray DOCX · {result['filename']}\nMain XML: {result['mainPart']}")
             for key, value in result["summary"].items():
                 print(f"{key}: {value}")
             print(f"comments: {len(result['comments'])}\nrevisions: {len(result['revisions'])}")
@@ -41,7 +41,7 @@ def main(argv=None):
             print(f"Saved {args.output}", file=sys.stderr)
         return 0
     except (DocxError, OSError) as exc:
-        print(f"DOCX Ray: {exc}", file=sys.stderr)
+        print(f"Xray DOCX: {exc}", file=sys.stderr)
         return 2
 
 

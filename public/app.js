@@ -225,7 +225,7 @@ $('export').addEventListener('click', async () => {
   try {
     const bytes = await sdk.call('export');
     if (version !== operationVersion) return;
-    download(new Blob([bytes], {type:'application/zip'}), 'docx-ray-xml.zip');
+    download(new Blob([bytes], {type:'application/zip'}), 'xray-docx-xml.zip');
     status('Downloaded XML bundle with original part bytes.');
   } catch (error) {if (version === operationVersion) status(error.message, true);} finally {if (version === operationVersion) setBusy(false);}
 });

@@ -68,8 +68,8 @@ test('keyboard tabs and text mapping still work after a download', async ({page}
   await page.locator('#raw-tab').focus();
   await page.keyboard.press('ArrowRight');
   await expect(page.locator('#visual-tab')).toHaveAttribute('aria-selected','true');
-  await page.locator('#paragraphs button').filter({hasText:'Hello from DOCX Ray'}).click();
-  await expect(page.locator('#snippet')).toContainText('Hello from DOCX Ray');
+  await page.locator('#paragraphs button').filter({hasText:'Hello from Xray DOCX'}).click();
+  await expect(page.locator('#snippet')).toContainText('Hello from Xray DOCX');
   await page.keyboard.press('End');
 });
 
@@ -163,7 +163,7 @@ test('many paragraphs render completely, map the final paragraph and export orig
 
 test('document markup stays text and the page fits the viewport', async ({page}, testInfo) => {
   const zip = await JSZip.loadAsync(sample);
-  zip.file('word/document.xml', (await zip.file('word/document.xml').async('string')).replace('Hello from DOCX Ray.', '&lt;img src=x onerror=alert(1)&gt;'));
+  zip.file('word/document.xml', (await zip.file('word/document.xml').async('string')).replace('Hello from Xray DOCX.', '&lt;img src=x onerror=alert(1)&gt;'));
   await upload(page, await zip.generateAsync({type:'nodebuffer'}));
   await page.locator('#visual-tab').click();
   await expect(page.locator('#paragraphs')).toContainText('<img src=x');

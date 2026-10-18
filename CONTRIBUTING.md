@@ -1,6 +1,6 @@
 # Contributing
 
-Keep browser extraction in `web/sdk.mjs`, worker messages in `web/worker.mjs`, and UI rendering in `public/`. Python under `docx_ray/` is for the offline CLI and local static hosting.
+Keep browser extraction in `web/sdk.mjs`, worker messages in `web/worker.mjs`, and UI rendering in `public/`. Python under `xray_docx/` is for the offline CLI and local static hosting.
 
 Never send document bytes over the network, fetch external relationships, or insert document content with `innerHTML`. Keep raw XML, original bytes, and reserialized snippets distinct.
 

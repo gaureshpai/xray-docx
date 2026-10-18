@@ -43,4 +43,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
       - name: Python syntax
-        run: python3 -m compileall -q docx_ray scripts
+        run: python3 -m compileall -q xray_docx scripts

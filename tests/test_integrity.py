@@ -11,8 +11,8 @@ import zipfile
 import zlib
 from pathlib import Path
 
-from docx_ray.models import DocxError
-from docx_ray.service import inspect_docx, xml_bundle
+from xray_docx.models import DocxError
+from xray_docx.service import inspect_docx, xml_bundle
 
 SAMPLE = (Path(__file__).resolve().parents[1] / "public/sample.docx").read_bytes()
 
@@ -34,7 +34,7 @@ def binary_fixture(
         for entry in source.infolist():
             target.writestr(entry, source.read(entry))
         payload = (
-            hashlib.shake_256(b"DOCX Ray synthetic binary").digest(size)
+            hashlib.shake_256(b"Xray DOCX synthetic binary").digest(size)
             if random_data
             else bytes(range(32)) * (size // 32)
         )
@@ -104,7 +104,7 @@ class BinaryIntegrityTests(unittest.TestCase):
                 source = Path(directory) / "invalid.docx"
                 source.write_bytes(binary_fixture(**options))
                 result = subprocess.run(
-                    [sys.executable, "-m", "docx_ray.cli", str(source)], capture_output=True, text=True
+                    [sys.executable, "-m", "xray_docx.cli", str(source)], capture_output=True, text=True
                 )
                 self.assertEqual(result.returncode, 2)
                 self.assertNotIn("Traceback", result.stderr)
@@ -118,7 +118,9 @@ class BinaryIntegrityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / "deflate.docx"
             source.write_bytes(binary_fixture(corrupt=True, deflated=True))
-            result = subprocess.run([sys.executable, "-m", "docx_ray.cli", str(source)], capture_output=True, text=True)
+            result = subprocess.run(
+                [sys.executable, "-m", "xray_docx.cli", str(source)], capture_output=True, text=True
+            )
             self.assertEqual(result.returncode, 2)
             self.assertIn("corrupt", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
@@ -138,7 +140,7 @@ class BinaryIntegrityTests(unittest.TestCase):
             output = Path(directory) / "xml.zip"
             source.write_bytes(binary_fixture(corrupt=True))
             result = subprocess.run(
-                [sys.executable, "-m", "docx_ray.cli", str(source), "--json", "--output", str(output)],
+                [sys.executable, "-m", "xray_docx.cli", str(source), "--json", "--output", str(output)],
                 capture_output=True,
                 text=True,
             )

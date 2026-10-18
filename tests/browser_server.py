@@ -4,7 +4,7 @@ import json
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from docx_ray.server import LocalHandler
+from xray_docx.server import LocalHandler
 
 CONFIG = json.loads(Path("vercel.json").read_text())
 

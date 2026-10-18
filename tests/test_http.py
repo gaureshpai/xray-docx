@@ -5,7 +5,7 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 
-from docx_ray.server import LocalHandler
+from xray_docx.server import LocalHandler
 
 
 class StaticServerTests(unittest.TestCase):

@@ -1,4 +1,4 @@
-# DOCX Ray
+# Xray DOCX
 
 Look inside a Word document with a **client-only website** or an offline Python CLI.
 
@@ -21,19 +21,19 @@ Node 24.15+ and Python 3.12+ for the local static server:
 ```sh
 npm ci --ignore-scripts
 npm run build
-py -3 -m docx_ray.server
+py -3 -m xray_docx.server
 ```
 
-On macOS or Linux, use `python -m docx_ray.server` instead. Open http://127.0.0.1:8000. The server only serves static files; conversion runs in your browser.
+On macOS or Linux, use `python -m xray_docx.server` instead. Open http://127.0.0.1:8000. The server only serves static files; conversion runs in your browser.
 
 ## Use the offline CLI
 
-On Windows, use `py -3` to run Python; on macOS or Linux, use `python`.
+Install the published package with `python -m pip install xray-docx`. It requires Python 3.12+ and has no production dependencies. On Windows, use `py -3` to run Python; on macOS or Linux, use `python`.
 
 ```sh
-py -3 -m docx_ray report.docx
-py -3 -m docx_ray report.docx --part word/document.xml
-py -3 -m docx_ray report.docx --output xml-parts.zip
+py -3 -m xray_docx report.docx
+py -3 -m xray_docx report.docx --part word/document.xml
+py -3 -m xray_docx report.docx --output xml-parts.zip
 ```
 
 ## Test and deploy

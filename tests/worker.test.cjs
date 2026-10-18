@@ -21,6 +21,6 @@ test('worker serializes an inspection followed immediately by a part read', asyn
     await completed;
     assert.equal(responses.get(1).error, undefined);
     assert.equal(responses.get(2).error, undefined);
-    assert.match(responses.get(2).result.xml, /Hello from DOCX Ray/);
+    assert.match(responses.get(2).result.xml, /Hello from Xray DOCX/);
   } finally {await worker.terminate();}
 });

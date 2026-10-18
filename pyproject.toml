@@ -3,17 +3,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "docx-ray"
+name = "xray-docx"
 version = "1.0.0"
 description = "A read-only DOCX package and XML explorer"
+readme = "xray_docx/README.md"
 requires-python = ">=3.12"
 dependencies = []
 
 [project.scripts]
-docx-ray = "docx_ray.cli:main"
+xray-docx = "xray_docx.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["docx_ray*"]
+include = ["xray_docx*"]
 
 [tool.ruff]
 line-length = 120

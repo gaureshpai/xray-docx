@@ -5,7 +5,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from docx_ray.service import inspect_docx, xml_bundle
+from xray_docx.service import inspect_docx, xml_bundle
 
 FIXTURE = (Path(__file__).parent / "reviewed.docx").read_bytes()
 
@@ -51,7 +51,7 @@ class PackageParityTests(unittest.TestCase):
         return output.getvalue()
 
     def test_forged_main_relationship_rejected(self):
-        from docx_ray.models import DocxError
+        from xray_docx.models import DocxError
 
         data = self.changed(
             "_rels/.rels",
@@ -64,7 +64,7 @@ class PackageParityTests(unittest.TestCase):
             inspect_docx(data)
 
     def test_foreign_content_override_rejected(self):
-        from docx_ray.models import DocxError
+        from xray_docx.models import DocxError
 
         data = self.changed(
             "[Content_Types].xml",
@@ -76,7 +76,7 @@ class PackageParityTests(unittest.TestCase):
             inspect_docx(data)
 
     def test_multiple_main_relationships_rejected(self):
-        from docx_ray.models import DocxError
+        from xray_docx.models import DocxError
 
         data = self.changed(
             "_rels/.rels",

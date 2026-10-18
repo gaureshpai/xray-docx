@@ -5,8 +5,49 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description"
-    content="Look inside a Word document. Explore its ZIP package, raw XML and document relationships with Xray DOCX.">
-  <title>Xray DOCX · Look beneath the page</title>
+    content="A DOCX is a ZIP package of XML, relationships, and media. Explore its contents locally in your browser with Xray DOCX.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#14261e">
+  <link rel="canonical" href="https://xray-docx.gauresh.dev/">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <title>Xray DOCX | Explore Word document internals</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Xray DOCX">
+  <meta property="og:title" content="A DOCX is a ZIP package | Xray DOCX">
+  <meta property="og:description"
+    content="Explore the XML, relationships, and media inside a Word document. It all runs locally in your browser; your file is never uploaded.">
+  <meta property="og:url" content="https://xray-docx.gauresh.dev/">
+  <meta property="og:image" content="https://xray-docx.gauresh.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt"
+    content="Xray DOCX shows a Word document as a ZIP package containing XML files and media.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="A DOCX is a ZIP package | Xray DOCX">
+  <meta name="twitter:description"
+    content="Explore the XML, relationships, and media inside a Word document, entirely in your browser.">
+  <meta name="twitter:image" content="https://xray-docx.gauresh.dev/og-image.png">
+  <meta name="twitter:image:alt"
+    content="Xray DOCX shows a Word document as a ZIP package containing XML files and media.">
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Xray DOCX",
+      "url": "https://xray-docx.gauresh.dev/",
+      "description": "Explore XML, relationships, comments, tracked changes, and media inside a DOCX package. Processing runs locally in your browser.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+  </script>
   <link rel="stylesheet" href="/style.css">
   <script src="/sdk-client.js" defer></script>
   <script src="/app.js" defer></script>
@@ -20,7 +61,8 @@
     <section class="intro">
       <div class="eyebrow">A LOOK UNDER THE HOOD / 01</div>
       <h1>Look beneath<br>the <em>page.</em></h1>
-      <p>A Word document is a package of parts. Open yours to explore the XML, relationships, and text that live inside.
+      <p>A .docx file is a ZIP package of XML, relationships, and media. Explore its contents locally in your browser;
+        your document is never uploaded.
       </p>
       <div class="tags"><span>DOCX → ZIP → XML</span><span>Processed in your browser</span><span>Offline CLI
           available</span></div>

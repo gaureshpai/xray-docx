@@ -1,0 +1,21 @@
+{
+  "name": "Xray DOCX",
+  "short_name": "Xray DOCX",
+  "description": "Explore the XML and package parts inside Word documents, locally in your browser.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f5f0",
+  "theme_color": "#14261e",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

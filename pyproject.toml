@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xray-docx"
-version = "1.0.0"
+version = "1.0.1"
 description = "A read-only DOCX package and XML explorer"
 readme = "xray_docx/README.md"
 requires-python = ">=3.12"

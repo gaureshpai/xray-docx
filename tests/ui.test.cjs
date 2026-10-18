@@ -77,7 +77,12 @@ test('sample inspection renders raw XML, stats, parts and steps', async () => {
     assert.equal(ui.$('steps').children.length, 5);
     assert.equal(ui.$('stats').children.length, 6);
     assert.match(ui.$('xml').textContent, /<w:document/);
+    assert.match(ui.$('xml').textContent, /\n\s+<w:/);
     assert.match(ui.$('parts').textContent, /word\/styles.xml/);
+    const appPart = [...ui.$('parts').querySelectorAll('button')].find(button => button.textContent.includes('docProps/app.xml'));
+    appPart.click();
+    await until(() => /<Application(?:\s[^>]*)?>Xray DOCX<\/Application>/.test(ui.$('xml').textContent));
+    assert.match(ui.$('xml').textContent, /\n\s+<Application>/);
   } finally {ui.close();}
 });
 test('filter and keyboard tabs expose paragraph-to-XML mapping and relationships', async () => {

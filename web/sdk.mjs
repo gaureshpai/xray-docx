@@ -237,7 +237,7 @@ export class DocxRaySDK {
     if (!metadata) throw new Error('Package part not found.');
     const bytes = await this.archive.file(path).async('uint8array');
     if (metadata.kind === 'binary') return {...metadata, preview:hex(bytes), note:'Hex preview of the first 512 bytes. Download the full original part.'};
-    try {return {...metadata, xml:decode(bytes), note:'Decoded source XML. Download preserves original bytes and encoding.'};}
+    try {return {...metadata, xml:decode(bytes), note:'Decoded XML is formatted in the viewer. Download preserves original bytes and encoding.'};}
     catch (error) {return {...metadata, preview:hex(bytes), note:error.message};}
   }
   paragraph(index) {

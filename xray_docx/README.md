@@ -19,4 +19,4 @@ xray-docx report.docx --part word/document.xml
 xray-docx report.docx --output xml-parts.zip
 ```
 
-The command reports document structure and review markup, can print full inspection JSON or one XML part, and can export XML parts to a ZIP while preserving their original bytes. It does not modify the source document.
+The command reports document structure and review markup, can print full inspection JSON or a formatted XML part, and can export XML parts to a ZIP while preserving their original bytes. It does not modify the source document.

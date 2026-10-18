@@ -165,6 +165,16 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(result["summary"]["tables"], 1)
         self.assertTrue(any("ಕನ್ನಡ" in paragraph["text"] for paragraph in result["paragraphs"]))
 
+    def test_cli_part_is_formatted_and_sample_application_is_branded(self):
+        run = subprocess.run(
+            [sys.executable, "-m", "xray_docx", "public/sample.docx", "--part", "docProps/app.xml"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("\n  <Application>Xray DOCX</Application>", run.stdout)
+
     def test_cli_export_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "xml.zip"

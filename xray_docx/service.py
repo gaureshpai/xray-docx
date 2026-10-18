@@ -409,7 +409,7 @@ def _inspect(data, filename, limits):
                     revisions.append({**record, "type": kind})
         warnings = [
             "Visual preview is a text projection, not a Word layout renderer.",
-            "Paragraph snippets are reserialized; the Raw XML tab preserves decoded source text.",
+            "Raw XML is formatted for display; XML ZIP exports preserve original part bytes.",
         ]
         if any(r["external"] for r in relationships):
             warnings.append("External relationships are listed only; no links are fetched.")

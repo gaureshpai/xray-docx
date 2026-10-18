@@ -8,6 +8,32 @@ let replayTimers = [];
 let operationVersion = 0;
 let snippetVersion = 0;
 let sampleController = null;
+function prettyXml(source) {
+  if (/<!DOCTYPE|<!ENTITY/i.test(source)) return source;
+  const document = new DOMParser().parseFromString(source, 'application/xml');
+  const root = document.documentElement;
+  if (!root || root.localName === 'parsererror') return source;
+  const serializer = new XMLSerializer();
+  const indent = depth => '  '.repeat(depth);
+  const escapeAttribute = value => value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+  function format(element, depth=0) {
+    const children = [...element.childNodes];
+    const elementChildren = children.some(child => child.nodeType === 1);
+    if (!elementChildren) {
+      const attributes = [...element.attributes].map(attribute => ` ${attribute.name}="${escapeAttribute(attribute.value)}"`).join('');
+      if (!children.length) return `${indent(depth)}<${element.nodeName}${attributes}/>`;
+      return `${indent(depth)}<${element.nodeName}${attributes}>${children.map(child => serializer.serializeToString(child)).join('')}</${element.nodeName}>`;
+    }
+    if (element.getAttributeNS('http://www.w3.org/XML/1998/namespace', 'space') === 'preserve' || children.some(child => [3,4].includes(child.nodeType) && child.nodeValue.trim())) {
+      return `${indent(depth)}${serializer.serializeToString(element)}`;
+    }
+    const attributes = [...element.attributes].map(attribute => ` ${attribute.name}="${escapeAttribute(attribute.value)}"`).join('');
+    const content = children.filter(child => !(child.nodeType === 3 && !child.nodeValue.trim())).map(child => child.nodeType === 1 ? format(child, depth + 1) : `${indent(depth + 1)}${serializer.serializeToString(child)}`);
+    return `${indent(depth)}<${element.nodeName}${attributes}>\n${content.join('\n')}\n${indent(depth)}</${element.nodeName}>`;
+  }
+  const declaration = source.match(/^\s*(<\?xml\b[^?]*\?>)/i)?.[1];
+  return `${declaration ? `${declaration}\n` : ''}${format(root)}`;
+}
 function element(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -73,7 +99,7 @@ async function selectPart(part, allowBusy=false) {
     const data = await sdk.call('part', {path:part.path});
     if (version !== selectionVersion) return;
     $('partinfo').textContent = `${part.bytes.toLocaleString()} bytes · ${data.note}`;
-    $('xml').textContent = data.xml ?? data.preview;
+    $('xml').textContent = data.xml ? prettyXml(data.xml) : data.preview;
     $('download').disabled = busy;
   } catch (error) {
     if (allowBusy) throw error;
